@@ -164,10 +164,22 @@
           hide-default-footer :single-expand="true" @update:expanded="handleExpandedUpdate">
 
           <!-- Quantity Column Template -->
-          <template v-slot:item.qty="{ item }">{{
-            formatFloat(item.qty)
-            }}</template>
-
+          <template v-slot:item.qty="{ item }">
+            <v-text-field density="compact" variant="outlined" color="primary"
+                    bg-color="white" hide-details :model-value="formatFloat(item.qty)" @change="
+                      [
+                        setFormatedQty(item, 'qty', null, false, $event.target.value),
+                        calc_stock_qty(item, item.qty),
+                      ]" :rules="[isNumber]" :disabled="!!item.posa_is_replace">
+            </v-text-field>
+          </template>
+          <template v-slot:item.uom="{ item }">
+            <v-select density="compact" bg-color="white" :label="frappe._('UOM')" v-model="item.uom"
+                      :items="item.item_uoms" variant="outlined" item-title="uom" item-value="uom" hide-details
+                      @update:model-value="calc_uom(item, $event)" :disabled="!!item.posa_is_replace ||
+                        (invoiceType === 'Return' && invoice_doc.return_against)">
+            </v-select> 
+          </template>
           <!-- Rate Column Template with Currency Symbol -->
           <template v-slot:item.rate="{ item }">
             <div class="d-flex align-center">
@@ -1142,6 +1154,13 @@ export default {
 
     // Create a new item object with default and calculated fields
     get_new_item(item) {
+      const vm = this;
+      if(!vm.customer) {
+        frappe.throw({
+          title: __("Customer Required"),
+          message: __("Please select a customer to update item details.")
+        });
+      }
       const new_item = { ...item };
       if (!item.qty) {
         item.qty = 1;
