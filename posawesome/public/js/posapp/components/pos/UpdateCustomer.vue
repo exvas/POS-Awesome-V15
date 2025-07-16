@@ -149,7 +149,7 @@ export default {
     mobile_no: '',
     address_line1: '',
     city: '',
-    country: 'Pakistan',
+    country: frappe.defaults.get_global_default("country") || '',
     email_id: '',
     referral_code: '',
     birthday: '',
@@ -303,7 +303,7 @@ export default {
       this.mobile_no = '';
       this.address_line1 = '';
       this.city = '';
-      this.country = 'Pakistan';
+      this.country = '';
       this.email_id = '';
       this.referral_code = '';
       this.birthday = '';
@@ -552,7 +552,7 @@ export default {
         this.customer_id = data.name;
 		this.address_line1 = data.address_line1 || "";
 		this.city = data.city || "";
-		this.country = data.country || "Pakistan";
+		this.country = data.country || frappe.defaults.get_global_default("country");
         this.tax_id = data.tax_id;
         this.mobile_no = data.mobile_no;
         this.email_id = data.email_id;
