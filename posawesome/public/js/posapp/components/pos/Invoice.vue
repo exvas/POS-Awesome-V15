@@ -174,7 +174,7 @@
             </v-text-field>
           </template>
           <template v-slot:item.uom="{ item }">
-            <v-select density="compact" bg-color="white" :label="frappe._('UOM')" v-model="item.uom"
+            <v-select density="compact" bg-color="white" v-model="item.uom"
                       :items="item.item_uoms" variant="outlined" item-title="uom" item-value="uom" hide-details
                       @update:model-value="calc_uom(item, $event)" :disabled="!!item.posa_is_replace ||
                         (invoiceType === 'Return' && invoice_doc.return_against)">
