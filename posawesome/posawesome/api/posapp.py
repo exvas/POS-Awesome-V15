@@ -150,31 +150,23 @@ def get_stock_availability(item_code, warehouse):
     )
     
     # Get the last incoming rate (where incoming_rate > 0)
-    last_incoming_data = frappe.db.get_value(
-        "Stock Ledger Entry",
-        filters={
-            "item_code": item_code,
-            "warehouse": warehouse,
-            "is_cancelled": 0,
-            "incoming_rate": [">", 0],
-            "actual_qty": [">", 0]  # Only consider incoming/purchase entries
-        },
-        fieldname=["incoming_rate", "posting_date", "posting_time"],
-        order_by="posting_date desc, posting_time desc, creation desc",
-        as_dict=True
-    )
+    uom = frappe.db.get_value("Item", item_code, "stock_uom")
+    buy_price_list = frappe.db.get_single_value("Buying Settings", "buying_price_list")
+    last_incoming_data = frappe.db.get_value("Item Price", {"item_code": item_code, "price_list": buy_price_list,"uom": uom}, "price_list_rate")
+    if not last_incoming_data:
+        last_incoming_data = frappe.db.get_value("Bin", {"item_code": item_code, "warehouse": warehouse}, "valuation_rate")
     
     if current_stock_data:
         result = {
             "actual_qty": current_stock_data.qty_after_transaction or 0.0,
-            "incoming_rate": current_stock_data.incoming_rate or 0.0,
-            "last_incoming_rate": last_incoming_data.incoming_rate if last_incoming_data else 0.0
+            "incoming_rate": last_incoming_data or 0.0,
+            "last_incoming_rate": last_incoming_data if last_incoming_data else 0.0
         }
     else:
         result = {
             "actual_qty": 0.0,
             "incoming_rate": 0.0,
-            "last_incoming_rate": last_incoming_data.incoming_rate if last_incoming_data else 0.0
+            "last_incoming_rate": last_incoming_data if last_incoming_data else 0.0
         }
     
     return result
