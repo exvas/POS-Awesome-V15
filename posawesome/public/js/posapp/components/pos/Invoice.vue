@@ -188,7 +188,7 @@
           <template v-slot:item.rate="{ item }">
             <div class="d-flex align-center">
               <v-text-field density="compact" variant="outlined" color="primary"
-                    @click.stop bg-color="white" hide-details :prefix="currencySymbol(pos_profile.currency)"
+                    @click.stop bg-color="white" width="110" hide-details :prefix="currencySymbol(pos_profile.currency)"
                     :model-value="formatCurrency(item.rate)" @change="
                       [
                         setFormatedCurrency(item, 'rate', null, false, $event),
