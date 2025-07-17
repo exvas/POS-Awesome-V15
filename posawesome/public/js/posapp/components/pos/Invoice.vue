@@ -4692,40 +4692,40 @@ export default {
       });
     },
 
-    formatCurrency(value) {
-      if (!value) return "0.00";
+    // formatCurrency(value) {
+    //   if (!value) return "0.00";
 
-      // Convert to absolute value for comparison
-      const absValue = Math.abs(value);
+    //   // Convert to absolute value for comparison
+    //   const absValue = Math.abs(value);
 
-      // Determine precision based on value size
-      let precision;
-      if (absValue >= 1) {
-        // Normal values use standard precision (2)
-        precision = 2;
-      } else if (absValue >= 0.01) {
-        // Small values between 0.01 and 1 use 4 decimal places
-        precision = 4;
-      } else {
-        // Very small values use higher precision (6)
-        precision = 6;
-      }
+    //   // Determine precision based on value size
+    //   let precision;
+    //   if (absValue >= 1) {
+    //     // Normal values use standard precision (2)
+    //     precision = 2;
+    //   } else if (absValue >= 0.01) {
+    //     // Small values between 0.01 and 1 use 4 decimal places
+    //     precision = 4;
+    //   } else {
+    //     // Very small values use higher precision (6)
+    //     precision = 6;
+    //   }
 
-      // Format the number with determined precision
-      const formattedValue = this.flt(value, precision).toFixed(precision);
+    //   // Format the number with determined precision
+    //   const formattedValue = this.flt(value, precision).toFixed(precision);
 
-      // Remove trailing zeros after decimal point while keeping at least 2 decimals
-      const parts = formattedValue.split('.');
-      if (parts.length === 2) {
-        const decimalPart = parts[1].replace(/0+$/, '');
-        if (decimalPart.length < 2) {
-          return `${parts[0]}.${decimalPart.padEnd(2, '0')}`;
-        }
-        return `${parts[0]}.${decimalPart}`;
-      }
+    //   // Remove trailing zeros after decimal point while keeping at least 2 decimals
+    //   const parts = formattedValue.split('.');
+    //   if (parts.length === 2) {
+    //     const decimalPart = parts[1].replace(/0+$/, '');
+    //     if (decimalPart.length < 2) {
+    //       return `${parts[0]}.${decimalPart.padEnd(2, '0')}`;
+    //     }
+    //     return `${parts[0]}.${decimalPart}`;
+    //   }
 
-      return formattedValue;
-    },
+    //   return formattedValue;
+    // },
 
     flt(value, precision = null) {
       // Enhanced float handling for small numbers
@@ -4854,13 +4854,15 @@ export default {
         ? "Order"
         : "Invoice";
 
-      frappe.db.get_single_value("System Settings", "float_precision").then((val) => {
-        this.float_precision = parseInt(val || 2);
-      });
+      // frappe.db.get_single_value("System Settings", "float_precision").then((val) => {
+      //   this.float_precision = parseInt(val || 2);
+      // });
 
-      frappe.db.get_single_value("System Settings", "currency_precision").then((val) => {
-        this.currency_precision = parseInt(val || 2);
-      });
+      // frappe.db.get_single_value("System Settings", "currency_precision").then((val) => {
+      //   this.currency_precision = parseInt(val || 2);
+      // });
+      this.float_precision = frappe.defaults.get_default('float_precision'); // Set default float precision
+      this.currency_precision = frappe.defaults.get_default('currency_precision'); // Set default currency precision
 
       // Add this block to handle currency initialization
       if (this.pos_profile.posa_allow_multi_currency) {

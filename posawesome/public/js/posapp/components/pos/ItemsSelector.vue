@@ -34,11 +34,11 @@
                   <v-card-text class="text--primary pa-1">
                     <div class="text-caption text-primary">
                       {{ currencySymbol(pos_profile.currency) || "" }}
-                      {{ format_currency(item.rate, pos_profile.currency, 4) }}
+                      {{ formatCurrency(item.rate, pos_profile.currency, 4) }}
                     </div>
                     <div v-if="pos_profile.posa_allow_multi_currency && selected_currency !== pos_profile.currency" class="text-caption text-success">
                       {{ currencySymbol(selected_currency) || "" }}
-                      {{ format_currency(getConvertedRate(item), selected_currency, 4) }}
+                      {{ formatCurrency(getConvertedRate(item), selected_currency, 4) }}
                     </div>
                     
                     <div class="text-caption golden--text">
@@ -65,10 +65,10 @@
                 <template v-slot:item.rate="{ item }">
                   <div>
                     <div class="text-primary">{{ currencySymbol(pos_profile.currency) }}
-                      {{ format_currency(item.rate, pos_profile.currency, 4) }}</div>
+                      {{ formatCurrency(item.rate, pos_profile.currency, 4) }}</div>
                     <div v-if="pos_profile.posa_allow_multi_currency && selected_currency !== pos_profile.currency" class="text-success">
                       {{ currencySymbol(selected_currency) }}
-                      {{ format_currency(getConvertedRate(item), selected_currency, 4) }}
+                      {{ formatCurrency(getConvertedRate(item), selected_currency, 4) }}
                     </div>
                   </div>
                 </template>
@@ -77,7 +77,7 @@
                 </template>
                 <!-- Current Incoming Rate Column Template -->
                 <template v-slot:item.incoming_rate="{ item }">
-                  <span class="text-info">{{ item.incoming_rate ? format_currency(item.incoming_rate, pos_profile.currency, 4) : '-' }}</span>
+                  <span class="text-info">{{ item.incoming_rate ? formatCurrency(item.incoming_rate, pos_profile.currency, 4) : '-' }}</span>
                 </template>
                 <!-- Last Incoming Rate Column Template -->
                
@@ -729,20 +729,20 @@ export default {
     currencySymbol(currency) {
       return get_currency_symbol(currency);
     },
-    format_currency(value, currency, precision) {
-      if (!value) return '0';
+    // format_currency(value, currency, precision) {
+    //   if (!value) return '0';
       
-      // Convert to string for checking decimal points
-      let valueStr = value.toString();
+    //   // Convert to string for checking decimal points
+    //   let valueStr = value.toString();
       
-      // If value has decimal points, show 4 decimal places
-      if (valueStr.includes('.')) {
-        return flt(value, 4).toString();
-      }
+    //   // If value has decimal points, show 4 decimal places
+    //   if (valueStr.includes('.')) {
+    //     return flt(value, 4).toString();
+    //   }
       
-      // For whole numbers, return as is
-      return valueStr;
-    },
+    //   // For whole numbers, return as is
+    //   return valueStr;
+    // },
     format_number(value, precision) {
       if (!value) return '0';
       
