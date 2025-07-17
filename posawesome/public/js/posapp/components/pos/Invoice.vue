@@ -165,26 +165,39 @@
 
           <!-- Quantity Column Template -->
           <template v-slot:item.qty="{ item }">
-            <v-text-field density="compact" variant="outlined" color="primary"
-                    bg-color="white" hide-details :model-value="formatFloat(item.qty)" @change="
-                      [
-                        setFormatedQty(item, 'qty', null, false, $event.target.value),
-                        calc_stock_qty(item, item.qty),
-                      ]" :rules="[isNumber]" :disabled="!!item.posa_is_replace">
-            </v-text-field>
+            <div class="d-flex align-center">
+              <v-text-field density="compact" variant="outlined" color="primary"
+                          @click.stop bg-color="white" hide-details :model-value="formatFloat(item.qty)" @change="
+                        [
+                          setFormatedQty(item, 'qty', null, false, $event.target.value),
+                          calc_stock_qty(item, item.qty),
+                        ]" :rules="[isNumber]" :disabled="!!item.posa_is_replace">
+              </v-text-field>
+            </div>
           </template>
           <template v-slot:item.uom="{ item }">
-            <v-select density="compact" bg-color="white" v-model="item.uom"
-                      :items="item.item_uoms" variant="outlined" item-title="uom" item-value="uom" hide-details
-                      @update:model-value="calc_uom(item, $event)" :disabled="!!item.posa_is_replace ||
-                        (invoiceType === 'Return' && invoice_doc.return_against)">
-            </v-select> 
+            <div class="d-flex align-center">
+              <v-select density="compact" bg-color="white" v-model="item.uom"
+                        @click.stop :items="item.item_uoms" variant="outlined" item-title="uom" item-value="uom" hide-details
+                        @update:model-value="calc_uom(item, $event)" :disabled="!!item.posa_is_replace ||
+                          (invoiceType === 'Return' && invoice_doc.return_against)">
+              </v-select> 
+            </div>
           </template>
           <!-- Rate Column Template with Currency Symbol -->
           <template v-slot:item.rate="{ item }">
             <div class="d-flex align-center">
-              <span>{{ currencySymbol(displayCurrency) }}</span>
-              <span>{{ formatCurrency(item.rate) }}</span>
+              <v-text-field density="compact" variant="outlined" color="primary"
+                    @click.stop bg-color="white" hide-details :prefix="currencySymbol(pos_profile.currency)"
+                    :model-value="formatCurrency(item.rate)" @change="
+                      [
+                        setFormatedCurrency(item, 'rate', null, false, $event),
+                        calc_prices(item, $event.target.value, $event),
+                      ]" :rules="[isNumber]" id="rate" :disabled="!!item.posa_is_replace ||
+                        !!item.posa_offer_applied ||
+                        !pos_profile.posa_allow_user_to_edit_rate ||
+                        (invoiceType === 'Return' && invoice_doc.return_against)">
+                </v-text-field>
             </div>
           </template>
 
