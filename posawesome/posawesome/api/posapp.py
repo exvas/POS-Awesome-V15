@@ -150,11 +150,11 @@ def get_stock_availability(item_code, warehouse):
     )
     
     # Get the last incoming rate (where incoming_rate > 0)
-    uom = frappe.db.get_value("Item", item_code, "stock_uom")
-    buy_price_list = frappe.db.get_single_value("Buying Settings", "buying_price_list")
-    last_incoming_data = frappe.db.get_value("Item Price", {"item_code": item_code, "price_list": buy_price_list,"uom": uom}, "price_list_rate")
-    if not last_incoming_data:
-        last_incoming_data = frappe.db.get_value("Bin", {"item_code": item_code, "warehouse": warehouse}, "valuation_rate")
+    # uom = frappe.db.get_value("Item", item_code, "stock_uom")
+    # buy_price_list = frappe.db.get_single_value("Buying Settings", "buying_price_list")
+    # last_incoming_data = frappe.db.get_value("Item Price", {"item_code": item_code, "price_list": buy_price_list,"uom": uom}, "price_list_rate")
+    # if not last_incoming_data:
+    last_incoming_data = frappe.db.get_value("Bin", {"item_code": item_code, "warehouse": warehouse}, "valuation_rate")
     
     if current_stock_data:
         result = {
