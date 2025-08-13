@@ -33,15 +33,13 @@
                   </v-img>
                   <v-card-text class="text--primary pa-1">
                     <div class="text-caption text-primary">
-                      {{ currencySymbol(pos_profile.currency) || "" }}
-                      {{ formatCurrency(item.rate, pos_profile.currency, 4) }}
+                      {{ formatCurrency(item.rate) }}
                     </div>
                     <div v-if="pos_profile.posa_allow_multi_currency && selected_currency !== pos_profile.currency" class="text-caption text-success">
-                      {{ currencySymbol(selected_currency) || "" }}
-                      {{ formatCurrency(getConvertedRate(item), selected_currency, 4) }}
+                      {{ formatCurrency(getConvertedRate(item)) }}
                     </div>
                     
-                    <div class="text-caption golden--text">
+                    <div class="text-caption text-green font-weight-bold">
                       {{ format_number(item.actual_qty, 4) || 0 }}
                       {{ item.stock_uom || "" }}
                     </div>
@@ -64,20 +62,18 @@
                 class="elevation-1" :items-per-page="itemsPerPage" hide-default-footer @click:row="click_item_row">
                 <template v-slot:item.rate="{ item }">
                   <div>
-                    <div class="text-primary">{{ currencySymbol(pos_profile.currency) }}
-                      {{ formatCurrency(item.rate, pos_profile.currency, 4) }}</div>
+                    <div class="text-primary">{{ formatCurrency(item.rate) }}</div>
                     <div v-if="pos_profile.posa_allow_multi_currency && selected_currency !== pos_profile.currency" class="text-success">
-                      {{ currencySymbol(selected_currency) }}
-                      {{ formatCurrency(getConvertedRate(item), selected_currency, 4) }}
+                      {{ formatCurrency(getConvertedRate(item)) }}
                     </div>
                   </div>
                 </template>
                 <template v-slot:item.actual_qty="{ item }">
-                  <span class="golden--text">{{ format_number(item.actual_qty, 4) }}</span>
+                  <span class="text-green font-weight-bold">{{ format_number(item.actual_qty, 4) }}</span>
                 </template>
                 <!-- Current Incoming Rate Column Template -->
                 <template v-slot:item.incoming_rate="{ item }">
-                  <span class="text-info">{{ item.incoming_rate ? formatCurrency(item.incoming_rate, pos_profile.currency, 4) : '-' }}</span>
+                  <span class="text-info">{{ item.incoming_rate ? formatCurrency(item.incoming_rate) : '-' }}</span>
                 </template>
                 <!-- Last Incoming Rate Column Template -->
                
@@ -317,7 +313,7 @@ export default {
       key: "item_code",
     },
   ];
-  items_headers.push({ title: __("Available QTY"), key: "actual_qty", align: "start" });
+  items_headers.push({ title: __("Qty Avail"), key: "actual_qty", align: "start" });
   // Add current incoming rate column if enabled
 
   
@@ -724,7 +720,7 @@ export default {
       // To convert PKR to USD: divide by exchange rate
       // Example: 3000 PKR / 300 = 10 USD
       const convertedRate = item.rate / this.exchange_rate;
-      return this.flt(convertedRate, 4);
+      return this.flt(convertedRate, this.currency_precision);
     },
     currencySymbol(currency) {
       return get_currency_symbol(currency);
@@ -749,9 +745,10 @@ export default {
       // Convert to string for checking decimal points
       let valueStr = value.toString();
       
-      // If value has decimal points, show 4 decimal places
+      // If value has decimal points, use specified precision or currency precision
       if (valueStr.includes('.')) {
-        return flt(value, 4).toString();
+        const prec = precision != null ? precision : this.currency_precision;
+        return this.flt(value, prec).toString();
       }
       
       // For whole numbers, return as is

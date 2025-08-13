@@ -94,5 +94,19 @@ export default {
             frappe.defaults.get_default('float_precision') || 2;
         this.currency_precision =
             frappe.defaults.get_default('currency_precision') || 2;
+
+        const updatePrecision = (data) => {
+            const profile = data.pos_profile || data;
+            const prec = parseInt(profile.posa_decimal_precision);
+            if (!isNaN(prec)) {
+                this.float_precision = prec;
+                this.currency_precision = prec;
+            }
+        };
+
+        if (this.eventBus && this.eventBus.on) {
+            this.eventBus.on('register_pos_profile', updatePrecision);
+            this.eventBus.on('payments_register_pos_profile', updatePrecision);
+        }
     }
 };
