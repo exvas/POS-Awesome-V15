@@ -297,6 +297,14 @@
                   <v-text-field density="compact" variant="outlined" color="primary" :label="frappe._('Item Code')"
                     bg-color="white" hide-details v-model="item.item_code" disabled></v-text-field>
                 </v-col>
+                <v-col cols="12" sm="8">
+                  <v-text-field density="compact" variant="outlined" color="primary" :label="frappe._('Description')"
+                    bg-color="white" hide-details v-model="item.description" 
+                    :disabled="!!item.posa_is_replace"
+                    @change="update_item_description(item, $event.target.value)"></v-text-field>
+                </v-col>
+
+                <!-- Second Row -->
                 <v-col cols="12" sm="4">
                   <v-text-field density="compact" variant="outlined" color="primary" :label="frappe._('QTY')"
                     bg-color="white" hide-details :model-value="formatFloat(item.qty)" @change="
@@ -311,8 +319,12 @@
                     @update:model-value="calc_uom(item, $event)" :disabled="!!item.posa_is_replace ||
                       (invoiceType === 'Return' && invoice_doc.return_against)"></v-select>
                 </v-col>
+                <v-col cols="12" sm="4">
+                  <v-text-field density="compact" variant="outlined" color="primary" :label="frappe._('Group')"
+                    bg-color="white" hide-details v-model="item.item_group" disabled></v-text-field>
+                </v-col>
 
-                <!-- Second Row -->
+                <!-- Third Row -->
                 <v-col cols="12" sm="4">
                   <v-text-field density="compact" variant="outlined" color="primary" :label="frappe._('Rate')"
                     bg-color="white" hide-details :prefix="currencySymbol(pos_profile.currency)"
@@ -346,7 +358,7 @@
                     :prefix="currencySymbol(pos_profile.currency)"></v-text-field>
                 </v-col>
 
-                <!-- Third Row -->
+                <!-- Fourth Row -->
                 <v-col cols="12" sm="4">
                   <v-text-field density="compact" variant="outlined" color="primary"
                     :label="frappe._('Price list Rate')" bg-color="white" hide-details
@@ -358,15 +370,12 @@
                     bg-color="white" hide-details :model-value="formatFloat(item.actual_qty)" disabled></v-text-field>
                 </v-col>
                 <v-col cols="12" sm="4">
-                  <v-text-field density="compact" variant="outlined" color="primary" :label="frappe._('Group')"
-                    bg-color="white" hide-details v-model="item.item_group" disabled></v-text-field>
-                </v-col>
-
-                <!-- Fourth Row -->
-                <v-col cols="12" sm="4">
                   <v-text-field density="compact" variant="outlined" color="primary" :label="frappe._('Stock QTY')"
                     bg-color="white" hide-details :model-value="formatFloat(item.stock_qty)" disabled></v-text-field>
                 </v-col>
+
+                <!-- Fifth Row -->
+                <!-- Fifth Row -->
                 <v-col cols="12" sm="4">
                   <v-text-field density="compact" variant="outlined" color="primary" :label="frappe._('Stock UOM')"
                     bg-color="white" hide-details v-model="item.stock_uom" disabled></v-text-field>
@@ -764,6 +773,15 @@ export default {
   },
 
   methods: {
+    // Update item description when user edits it
+    update_item_description(item, newDescription) {
+      if (item && newDescription !== undefined) {
+        item.description = newDescription;
+        // Mark item as modified to ensure the description is saved with the invoice
+        item._description_modified = true;
+        this.$forceUpdate();
+      }
+    },
     shortOpenFirstItem(e) {
       if (e.key.toLowerCase() === "a" && (e.ctrlKey || e.metaKey)) {
         try {
@@ -1215,6 +1233,9 @@ export default {
       new_item.posa_notes = "";
       new_item.posa_delivery_date = "";
       new_item.posa_row_id = this.makeid(20);
+      
+      // Set description from item master, fallback to item_name if not available
+      new_item.description = item.description || item.item_name || item.item_code;
 
       // FIXED: Preserve logical rack information
       new_item.logical_rack = item.logical_rack || item.rack || item.custom_logical_rack || "";
@@ -1827,6 +1848,8 @@ export default {
       this.items.forEach((item) => {
         const new_item = {
           item_code: item.item_code,
+          item_name: item.item_name || item.item_code,
+          description: item.description || item.item_name || item.item_code,
           posa_row_id: item.posa_row_id,
           posa_offers: item.posa_offers,
           posa_offer_applied: item.posa_offer_applied,
@@ -2578,6 +2601,11 @@ export default {
             item.stock_uom = data.stock_uom;
             item.has_serial_no = data.has_serial_no;
             item.has_batch_no = data.has_batch_no;
+            
+            // Update description from item master if not manually edited
+            if (data.description && !item._description_modified) {
+              item.description = data.description;
+            }
 
             // Calculate final amount
             item.amount = vm.flt(item.qty * item.rate, vm.currency_precision);
