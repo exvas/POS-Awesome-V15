@@ -473,7 +473,6 @@ export default {
         this.clearSearch();
       }
     },
-    },
     search_onchange: _.debounce(function(newSearchTerm) {
         const vm = this;
         if(newSearchTerm) vm.search = newSearchTerm;
@@ -780,72 +779,72 @@ export default {
         return dateString;
       }
     },
-    hasDecimalPrecision(value) {
-      // Check if the value has any decimal precision when multiplied by exchange rate
-      if (this.exchange_rate && this.exchange_rate !== 1) {
-        let convertedValue = value * this.exchange_rate;
-        return !Number.isInteger(convertedValue);
-      }
-      return !Number.isInteger(value);
-    },
+    // hasDecimalPrecision(value) {
+    //   // Check if the value has any decimal precision when multiplied by exchange rate
+    //   if (this.exchange_rate && this.exchange_rate !== 1) {
+    //     let convertedValue = value * this.exchange_rate;
+    //     return !Number.isInteger(convertedValue);
+    //   }
+    //   return !Number.isInteger(value);
+    // },
   },
 
   computed: {
     dynamic_items_headers() {
-    const headers = [
-      {
-        title: __("Name"),
-        align: "start",
-        sortable: true,
-        key: "item_name",
-      },
-      { title: __("QTY"), key: "qty", align: "center" },
-      { title: __("UOM"), key: "uom", align: "center" },
-      { title: __("Rate"), key: "rate", align: "center" },
-      { title: __("Amount"), key: "amount", align: "center" },
-    ];
+      const headers = [
+        {
+          title: __("Name"),
+          align: "start",
+          sortable: true,
+          key: "item_name",
+        },
+        { title: __("QTY"), key: "qty", align: "center" },
+        { title: __("UOM"), key: "uom", align: "center" },
+        { title: __("Rate"), key: "rate", align: "center" },
+        { title: __("Amount"), key: "amount", align: "center" },
+      ];
 
-    // Add incoming rate column if enabled in POS profile
-    if (this.pos_profile?.custom_show_incoming_rate) {
-      headers.splice(-1, 0, { 
-        title: __("Inc.Rate"), 
-        key: "incoming_rate", 
-        align: "center" 
-      });
-    }
+      // Add incoming rate column if enabled in POS profile
+      if (this.pos_profile?.custom_show_incoming_rate) {
+        headers.splice(-1, 0, { 
+          title: __("Inc.Rate"), 
+          key: "incoming_rate", 
+          align: "center" 
+        });
+      }
 
-    // Add last incoming rate column if enabled in POS profile
-    if (this.pos_profile?.custom_show_last_incoming_rate) {
-      headers.splice(-1, 0, { 
-        title: __("Last Inc.Rate"), 
-        key: "last_incoming_rate", 
-        align: "center" 
-      });
-    }
+      // Add last incoming rate column if enabled in POS profile
+      if (this.pos_profile?.custom_show_last_incoming_rate) {
+        headers.splice(-1, 0, { 
+          title: __("Last Inc.Rate"), 
+          key: "last_incoming_rate", 
+          align: "center" 
+        });
+      }
 
-    // Add logical rack column if enabled in POS profile
-    if (this.pos_profile?.custom_show_logical_rack) {
-      headers.splice(-1, 0, { 
-        title: __("Rack"), 
-        key: "logical_rack", 
-        align: "center" 
-      });
-    }
+      // Add logical rack column if enabled in POS profile
+      if (this.pos_profile?.custom_show_logical_rack) {
+        headers.splice(-1, 0, { 
+          title: __("Rack"), 
+          key: "logical_rack", 
+          align: "center" 
+        });
+      }
 
-    // Add OEM part number column if enabled in POS profile
-    if (this.pos_profile?.custom_show_oem_part_number) {
-      headers.splice(-1, 0, { 
-        title: __("OEM Part"), 
-        key: "oem_part_number", 
-        align: "center" 
-      });
-    }
+      // Add OEM part number column if enabled in POS profile
+      if (this.pos_profile?.custom_show_oem_part_number) {
+        headers.splice(-1, 0, { 
+          title: __("OEM Part"), 
+          key: "oem_part_number", 
+          align: "center" 
+        });
+      }
 
-    // Always add the Offer column at the end
-    headers.push({ title: __("Offer?"), key: "posa_is_offer", align: "center" });
+      // Always add the Offer column at the end
+      headers.push({ title: __("Offer?"), key: "posa_is_offer", align: "center" });
 
-    return headers;
-  },
+      return headers;
+    },
     filtered_items() {
       this.search = this.get_search(this.first_search);
       if (!this.pos_profile.pose_use_limit_search) {
