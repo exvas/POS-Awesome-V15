@@ -575,6 +575,10 @@ export default {
         
         return_doc.items.forEach((item) => {
           const new_item = { ...item };
+          // Reference original invoice row for backend validation
+          new_item.sales_invoice_item = item.name;
+          delete new_item.name;
+          
           // Make sure quantities are negative for returns
           new_item.qty = item.qty > 0 ? item.qty * -1 : item.qty;
           new_item.stock_qty = item.stock_qty > 0 ? item.stock_qty * -1 : item.stock_qty;

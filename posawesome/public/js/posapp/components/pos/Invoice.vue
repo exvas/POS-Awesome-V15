@@ -1866,7 +1866,9 @@ export default {
           posa_delivery_date: item.posa_delivery_date,
           is_bundle_item: item.is_bundle_item || 0,
           parent_bundle: item.parent_bundle || "",
-          custom_bundle_id: item.custom_bundle_id || ""
+          custom_bundle_id: item.custom_bundle_id || "",
+          // Link to original Sales Invoice Item for returns
+          ...(item.sales_invoice_item && { sales_invoice_item: item.sales_invoice_item })
         };
 
         // Handle currency conversion for rates and amounts
