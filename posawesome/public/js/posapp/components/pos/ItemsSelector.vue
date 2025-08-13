@@ -393,12 +393,29 @@ export default {
       const qty = this.get_item_qty(this.first_search);
       const new_item = { ...this.filtered_items[0] };
       new_item.qty = flt(qty);
+      
+      // Check for barcode match
       new_item.item_barcode.forEach((element) => {
         if (this.search == element.barcode) {
           new_item.uom = element.posa_uom;
           match = true;
         }
       });
+      
+      // Check for item code match
+      if (!match && new_item.item_code && this.search) {
+        if (new_item.item_code.toLowerCase().includes(this.search.toLowerCase())) {
+          match = true;
+        }
+      }
+      
+      // Check for item name match
+      if (!match && new_item.item_name && this.search) {
+        if (new_item.item_name.toLowerCase().includes(this.search.toLowerCase())) {
+          match = true;
+        }
+      }
+      
       if (
         !new_item.to_set_serial_no &&
         new_item.has_serial_no &&
@@ -433,14 +450,14 @@ export default {
 
       // Search by OEM Part Number
       if (!match && this.pos_profile.custom_show_oem_part_number) {
-        if (new_item.oem_part_number && new_item.oem_part_number.toLowerCase() === this.search.toLowerCase()) {
+        if (new_item.oem_part_number && new_item.oem_part_number.toLowerCase().includes(this.search.toLowerCase())) {
           match = true;
         }
       }
 
       // Search by Logical Rack
       if (!match && this.pos_profile.custom_show_logical_rack) {
-        if (new_item.logical_rack && new_item.logical_rack.toLowerCase() === this.search.toLowerCase()) {
+        if (new_item.logical_rack && new_item.logical_rack.toLowerCase().includes(this.search.toLowerCase())) {
           match = true;
         }
       }
@@ -449,17 +466,13 @@ export default {
         this.add_item(new_item);
         this.flags.serial_no = null;
         this.flags.batch_no = null;
-        this.qty = 1;
-        this.$refs.debounce_search.focus();
-
-        // ✅ Clear the search inputs
-        this.search = "";
-        this.first_search = "";
-        this.search_backup = "";
-
-        // ✅ Refocus the search input
-        this.$refs.debounce_search?.focus();
+        this.clearSearch();
+      } else if (this.filtered_items.length > 0) {
+        // If no explicit match but items are filtered, add the first one
+        this.add_item(new_item);
+        this.clearSearch();
       }
+    },
     },
     search_onchange: _.debounce(function(newSearchTerm) {
         const vm = this;
@@ -917,11 +930,39 @@ export default {
             });
           }
 
+          // Also search OEM Part Number along with other fields (not just as fallback)
+          if (this.pos_profile.custom_show_oem_part_number) {
+            const oem_matches = filtred_group_list.filter((item) => {
+              return item.oem_part_number && 
+                     item.oem_part_number.toLowerCase().includes(this.search.toLowerCase());
+            });
+            // Merge with existing results, avoiding duplicates
+            oem_matches.forEach(item => {
+              if (!filtred_list.find(existing => existing.item_code === item.item_code)) {
+                filtred_list.push(item);
+              }
+            });
+          }
+
           // Search by Logical Rack if enabled and no previous match
           if (filtred_list.length == 0 && this.pos_profile.custom_show_logical_rack) {
             filtred_list = filtred_group_list.filter((item) => {
               return item.logical_rack && 
                      item.logical_rack.toLowerCase().includes(this.search.toLowerCase());
+            });
+          }
+
+          // Also search Logical Rack along with other fields (not just as fallback)
+          if (this.pos_profile.custom_show_logical_rack) {
+            const rack_matches = filtred_group_list.filter((item) => {
+              return item.logical_rack && 
+                     item.logical_rack.toLowerCase().includes(this.search.toLowerCase());
+            });
+            // Merge with existing results, avoiding duplicates
+            rack_matches.forEach(item => {
+              if (!filtred_list.find(existing => existing.item_code === item.item_code)) {
+                filtred_list.push(item);
+              }
             });
           }
 
