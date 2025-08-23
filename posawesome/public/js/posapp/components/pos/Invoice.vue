@@ -104,7 +104,7 @@
         <v-col cols="4" class="pb-0 mb-0 pt-0">
           <v-text-field density="compact" variant="outlined" color="primary" :label="frappe._('Delivery Charges Rate')"
             bg-color="white" hide-details :model-value="formatCurrency(delivery_charges_rate)"
-            :prefix="currencySymbol(pos_profile.currency)" disabled></v-text-field>
+            :prefix="pos_profile.custom_show_currency_symbols ? currencySymbol(pos_profile.currency) : ''" disabled></v-text-field>
         </v-col>
       </v-row>
 
@@ -188,7 +188,7 @@
           <template v-slot:item.rate="{ item }">
             <div class="d-flex align-center">
               <v-text-field density="compact" variant="outlined" color="primary"
-                    @click.stop bg-color="white" width="110" hide-details :prefix="currencySymbol(pos_profile.currency)"
+                    @click.stop bg-color="white" width="110" hide-details :prefix="pos_profile.custom_show_currency_symbols ? currencySymbol(pos_profile.currency) : ''"
                     :model-value="formatCurrency(item.rate)" @change="
                       [
                         setFormatedCurrency(item, 'rate', null, false, $event),
@@ -204,7 +204,7 @@
           <!-- Amount Column Template with Currency Symbol -->
           <template v-slot:item.amount="{ item }">
             <div class="d-flex align-center">
-              <span>{{ currencySymbol(displayCurrency) }}</span>
+              <span v-if="pos_profile.custom_show_currency_symbols">{{ currencySymbol(displayCurrency) }}</span>
               <span>{{ formatCurrency(item.qty * item.rate) }}</span>
             </div>
           </template>
@@ -212,7 +212,7 @@
           <!-- Discount Amount Column Template -->
           <template v-slot:item.discount_amount="{ item }">
             <div class="d-flex align-center">
-              <span>{{ currencySymbol(displayCurrency) }}</span>
+              <span v-if="pos_profile.custom_show_currency_symbols">{{ currencySymbol(displayCurrency) }}</span>
               <span>{{ formatCurrency(item.discount_amount) }}</span>
             </div>
           </template>
@@ -220,7 +220,7 @@
           <!-- Price List Rate Column Template -->
           <template v-slot:item.price_list_rate="{ item }">
             <div class="d-flex align-center">
-              <span>{{ currencySymbol(displayCurrency) }}</span>
+              <span v-if="pos_profile.custom_show_currency_symbols">{{ currencySymbol(displayCurrency) }}</span>
               <span>{{ formatCurrency(item.price_list_rate) }}</span>
             </div>
           </template>
@@ -229,7 +229,7 @@
           <template v-slot:item.incoming_rate="{ item }">
             <div class="d-flex align-center">
               <span v-if="item.incoming_rate" class="text-info">
-                {{ currencySymbol(pos_profile.currency) }}
+                <span v-if="pos_profile.custom_show_currency_symbols">{{ currencySymbol(pos_profile.currency) }}</span>
                 {{ formatCurrency(item.incoming_rate) }}
               </span>
               <span v-else class="text-grey">-</span>
@@ -237,16 +237,15 @@
           </template>
 
           <!-- Last Customer Rate Column Template -->
-          <template v-slot:item.last_customer_rate="{ item }">             
-          <div class="d-flex flex-column">               
-            <span v-if="item.last_customer_rate && item.last_customer_rate > 0" class="d-flex align-center">                 
-                             
-                {{ currencySymbol(pos_profile.currency) }}                   
-                {{ formatCurrency(item.last_customer_rate) }}                 
-              </span>                          
+          <template v-slot:item.last_customer_rate="{ item }">
+          <div class="d-flex flex-column">
+            <span v-if="item.last_customer_rate && item.last_customer_rate > 0" class="d-flex align-center">
+                <span v-if="pos_profile.custom_show_currency_symbols">{{ currencySymbol(pos_profile.currency) }}</span>
+                {{ formatCurrency(item.last_customer_rate) }}
+              </span>
            
-            <span v-else class="text-grey">-</span>             
-          </div>           
+            <span v-else class="text-grey">-</span>
+          </div>
         </template>
 
           <!-- Logical Rack Column Template -->
@@ -327,7 +326,7 @@
                 <!-- Third Row -->
                 <v-col cols="12" sm="4">
                   <v-text-field density="compact" variant="outlined" color="primary" :label="frappe._('Rate')"
-                    bg-color="white" hide-details :prefix="currencySymbol(pos_profile.currency)"
+                    bg-color="white" hide-details :prefix="pos_profile.custom_show_currency_symbols ? currencySymbol(pos_profile.currency) : ''"
                     :model-value="formatCurrency(item.rate)" @change="
                       [
                         setFormatedCurrency(item, 'rate', null, false, $event),
@@ -355,7 +354,7 @@
                     @change="(event) => { if (expanded && expanded.length === 1 && expanded[0] === item.posa_row_id) { calc_prices(item, event.target.value, { target: { id: 'discount_amount' } }); } }"
                     :rules="['isNumber']" id="discount_amount"
                     :disabled="!!item.posa_is_replace || item.posa_offer_applied || !pos_profile.posa_allow_user_to_edit_item_discount || (invoiceType === 'Return' && invoice_doc.return_against)"
-                    :prefix="currencySymbol(pos_profile.currency)"></v-text-field>
+                    :prefix="pos_profile.custom_show_currency_symbols ? currencySymbol(pos_profile.currency) : ''"></v-text-field>
                 </v-col>
 
                 <!-- Fourth Row -->
@@ -363,7 +362,7 @@
                   <v-text-field density="compact" variant="outlined" color="primary"
                     :label="frappe._('Price list Rate')" bg-color="white" hide-details
                     :model-value="formatCurrency(item.price_list_rate)" disabled
-                    :prefix="currencySymbol(pos_profile.currency)"></v-text-field>
+                    :prefix="pos_profile.custom_show_currency_symbols ? currencySymbol(pos_profile.currency) : ''"></v-text-field>
                 </v-col>
                 <v-col cols="12" sm="4">
                   <v-text-field density="compact" variant="outlined" color="primary" :label="frappe._('Available QTY')"
@@ -475,7 +474,7 @@
             <v-col cols="6" v-if="!pos_profile.posa_use_percentage_discount">
               <v-text-field v-model="additional_discount" :label="frappe._('Additional Discount')"
                 prepend-inner-icon="mdi-cash-minus" variant="outlined" density="compact" color="warning"
-                :prefix="currencySymbol(pos_profile.currency)"
+                :prefix="pos_profile.custom_show_currency_symbols ? currencySymbol(pos_profile.currency) : ''"
                 :disabled="!pos_profile.posa_allow_user_to_edit_additional_discount" />
             </v-col>
 
@@ -489,13 +488,13 @@
             <!-- Items Discount -->
             <v-col cols="6">
               <v-text-field :model-value="formatCurrency(total_items_discount_amount)"
-                :prefix="currencySymbol(displayCurrency)" :label="frappe._('Items Discounts')"
+                :prefix="pos_profile.custom_show_currency_symbols ? currencySymbol(displayCurrency) : ''" :label="frappe._('Items Discounts')"
                 prepend-inner-icon="mdi-tag-minus" variant="outlined" density="compact" color="warning" readonly />
             </v-col>
 
             <!-- Total (moved to maintain row alignment) -->
             <v-col cols="6">
-              <v-text-field :model-value="formatCurrency(subtotal)" :prefix="currencySymbol(displayCurrency)"
+              <v-text-field :model-value="formatCurrency(subtotal)" :prefix="pos_profile.custom_show_currency_symbols ? currencySymbol(displayCurrency) : ''"
                 :label="frappe._('Total')" prepend-inner-icon="mdi-cash" variant="outlined" density="compact" readonly
                 color="success" />
             </v-col>

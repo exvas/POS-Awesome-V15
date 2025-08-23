@@ -260,6 +260,7 @@ fixtures = [
                     "POS Profile-posa_allow_mpesa_reconcile_payments",
                     "Sales Invoice-custom_reference_no",
                     "Sales Invoice-custom_reference_name",
+                    "custom_show_currency_symbols",
                 ),
             ]
         ],
