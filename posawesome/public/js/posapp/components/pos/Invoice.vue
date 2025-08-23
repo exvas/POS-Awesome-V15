@@ -535,6 +535,12 @@
                 {{ __("Print Draft") }}
               </v-btn>
             </v-col>
+            <v-col cols="12" v-if="pos_profile.custom_show_previous_transactions">
+              <v-btn block color="info" theme="dark" size="large" prepend-icon="mdi-history"
+                @click="open_previous_transactions">
+                {{ __("Previous Transactions") }}
+              </v-btn>
+            </v-col>
             <v-col cols="12">
               <v-btn block color="success" theme="dark" size="large" prepend-icon="mdi-credit-card"
                 @click="show_payment">
@@ -781,6 +787,12 @@ export default {
         item._description_modified = true;
         this.$forceUpdate();
       }
+    },
+    open_previous_transactions() {
+      this.eventBus.emit("open_previous_transactions", {
+        pos_profile: this.pos_profile,
+        customer: this.customer
+      });
     },
     shortOpenFirstItem(e) {
       if (e.key.toLowerCase() === "a" && (e.ctrlKey || e.metaKey)) {

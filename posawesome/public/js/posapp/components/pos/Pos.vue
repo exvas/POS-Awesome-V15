@@ -7,6 +7,7 @@
     <NewAddress></NewAddress>
     <MpesaPayments></MpesaPayments>
     <Variants></Variants>
+    <PreviousTransactions ref="previousTransactions"></PreviousTransactions>
     <OpeningDialog v-if="dialog" :dialog="dialog"></OpeningDialog>
     <v-row v-show="!dialog">
       <v-col v-show="!payment && !offers && !coupons" xl="5" lg="5" md="5" sm="5" cols="12" class="pos pr-0">
@@ -44,6 +45,7 @@ import NewAddress from './NewAddress.vue';
 import Variants from './Variants.vue';
 import Returns from './Returns.vue';
 import MpesaPayments from './Mpesa-Payments.vue';
+import PreviousTransactions from './PreviousTransactions.vue';
 
 export default {
   data: function () {
@@ -64,7 +66,6 @@ export default {
     Payments,
     Drafts,
     ClosingDialog,
-
     Returns,
     PosOffers,
     PosCoupons,
@@ -72,6 +73,7 @@ export default {
     Variants,
     MpesaPayments,
     SalesOrders,
+    PreviousTransactions,
   },
 
   methods: {
@@ -187,6 +189,11 @@ export default {
       this.eventBus.on('submit_closing_pos', (data) => {
         this.submit_closing_pos(data);
       });
+      this.eventBus.on('open_previous_transactions', (data) => {
+        this.$refs.previousTransactions.pos_profile = data.pos_profile;
+        this.$refs.previousTransactions.customer = data.customer;
+        this.$refs.previousTransactions.open_dialog();
+      });
     });
   },
   beforeUnmount() {
@@ -197,6 +204,7 @@ export default {
     this.eventBus.off('show_coupons');
     this.eventBus.off('open_closing_dialog');
     this.eventBus.off('submit_closing_pos');
+    this.eventBus.off('open_previous_transactions');
   },
 };
 </script>

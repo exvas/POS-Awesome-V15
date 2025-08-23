@@ -1,0 +1,12 @@
+[
+  {
+    "doctype": "Custom Field",
+    "name": "POS Profile-custom_show_previous_transactions",
+    "dt": "POS Profile",
+    "fieldname": "custom_show_previous_transactions",
+    "fieldtype": "Check",
+    "label": "Show Previous Transactions",
+    "insert_after": "posa_show_template_items",
+    "description": "Enable to show previous transactions button in POS"
+  }
+]

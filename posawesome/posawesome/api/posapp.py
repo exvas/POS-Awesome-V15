@@ -32,6 +32,124 @@ from posawesome.posawesome.doctype.delivery_charges.delivery_charges import (
 )
 from frappe.utils.caching import redis_cache
 
+@frappe.whitelist()
+def get_all_previous_transactions(from_date=None, to_date=None, customer=None, invoice_no=None, pos_profile=None, limit=100):
+    """
+    Returns all previous sales transactions with optional filters.
+    Output: List of invoices with their items and tax details
+    """
+    filters = {
+        "docstatus": 1,
+        "is_pos": 1
+    }
+    
+    if from_date:
+        filters["posting_date"] = (">=", from_date)
+    if to_date:
+        if "posting_date" in filters:
+            filters["posting_date"] = ("between", [from_date, to_date])
+        else:
+            filters["posting_date"] = ("<=", to_date)
+    if customer:
+        filters["customer"] = customer
+    if invoice_no:
+        filters["name"] = ["like", f"%{invoice_no}%"]
+    if pos_profile:
+        filters["pos_profile"] = pos_profile
+    
+    # Get invoices
+    invoices = frappe.db.get_all(
+        "Sales Invoice",
+        filters=filters,
+        fields=["name", "posting_date", "customer", "customer_name", "grand_total",
+                "total_taxes_and_charges", "discount_amount", "net_total"],
+        order_by="posting_date desc, creation desc",
+        limit_page_length=limit
+    )
+    
+    result = []
+    for invoice in invoices:
+        # Get items for each invoice
+        items = frappe.db.get_all(
+            "Sales Invoice Item",
+            filters={"parent": invoice["name"]},
+            fields=["item_code", "item_name", "qty", "uom", "rate", "amount",
+                   "discount_percentage", "discount_amount"]
+        )
+        
+        # Get taxes for the invoice
+        taxes = frappe.db.get_all(
+            "Sales Taxes and Charges",
+            filters={"parent": invoice["name"]},
+            fields=["description", "tax_amount", "total"]
+        )
+        
+        # Calculate total tax per item (proportional distribution)
+        total_tax = invoice.get("total_taxes_and_charges", 0)
+        net_total = invoice.get("net_total", 1) or 1  # Avoid division by zero
+        
+        for item in items:
+            # Calculate proportional tax for each item
+            item_tax = (item["amount"] / net_total) * total_tax if net_total else 0
+            item["tax_amount"] = round(item_tax, 2)
+        
+        result.append({
+            "invoice_no": invoice["name"],
+            "posting_date": invoice["posting_date"],
+            "customer": invoice["customer"],
+            "customer_name": invoice["customer_name"],
+            "grand_total": invoice["grand_total"],
+            "total_taxes": invoice["total_taxes_and_charges"],
+            "discount_amount": invoice["discount_amount"],
+            "items": items,
+            "taxes": taxes
+        })
+    
+    return result
+
+@frappe.whitelist()
+def get_previous_transactions_summary(from_date=None, to_date=None, customer=None, pos_profile=None):
+    """
+    Returns summary of previous transactions grouped by date
+    """
+    filters = {
+        "docstatus": 1,
+        "is_pos": 1
+    }
+    
+    if from_date:
+        filters["posting_date"] = (">=", from_date)
+    if to_date:
+        if "posting_date" in filters:
+            filters["posting_date"] = ("between", [from_date, to_date])
+        else:
+            filters["posting_date"] = ("<=", to_date)
+    if customer:
+        filters["customer"] = customer
+    if pos_profile:
+        filters["pos_profile"] = pos_profile
+    
+    # Get summary grouped by date
+    summary = frappe.db.sql("""
+        SELECT
+            posting_date,
+            COUNT(*) as invoice_count,
+            SUM(grand_total) as total_amount,
+            SUM(total_taxes_and_charges) as total_tax,
+            SUM(discount_amount) as total_discount
+        FROM `tabSales Invoice`
+        WHERE docstatus = 1 AND is_pos = 1
+            {conditions}
+        GROUP BY posting_date
+        ORDER BY posting_date DESC
+    """.format(
+        conditions=" AND " + " AND ".join([f"{k} {v[0]} %s" if isinstance(v, tuple) else f"{k} = %s"
+                                           for k, v in filters.items() if k not in ["docstatus", "is_pos"]])
+                  if len([k for k in filters.keys() if k not in ["docstatus", "is_pos"]]) > 0 else ""
+    ), tuple([v[1] if isinstance(v, tuple) else v for k, v in filters.items() if k not in ["docstatus", "is_pos"]]), as_dict=True)
+    
+    return summary
+
 def ensure_child_doctype(doc, table_field, child_doctype):
     """Ensure child rows have the correct doctype set."""
     for row in doc.get(table_field, []):
