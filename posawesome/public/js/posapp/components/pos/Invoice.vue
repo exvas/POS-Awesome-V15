@@ -634,10 +634,10 @@ export default {
         });
       }
 
-      // Add last incoming rate column if enabled in POS profile
+      // Add last customer rate column if enabled in POS profile
       if (this.pos_profile?.custom_show_last_custom_rate) {
         headers.splice(-1, 0, {
-          title: __("LC Rate"),
+          title: __("Lc.Rate"),
           key: "last_customer_rate",
           align: "center"
         });

@@ -477,12 +477,19 @@ export default {
         const vm = this;
         if(newSearchTerm) vm.search = newSearchTerm;
         
+        // Check if this is a barcode scan (usually barcodes are longer and alphanumeric)
+        const isLikelyBarcode = vm.search &&
+                               vm.search.length >= 8 &&
+                               /^[A-Za-z0-9]+$/.test(vm.search);
+        
         if (vm.pos_profile.pose_use_limit_search) {
             vm.get_items();
         } else {
             // Save the current filtered items before search to maintain quantity data
             const current_items = [...vm.filtered_items];
-            if(vm.search && vm.search.length >=3) {
+            
+            // For manual search (not barcode), use existing behavior
+            if(!isLikelyBarcode && vm.search && vm.search.length >= 3) {
               vm.enter_event();
             }
             
@@ -652,33 +659,178 @@ export default {
         }
         
         onScan.attachTo(document, {
-          suffixKeyCodes: [],
+          suffixKeyCodes: [13], // Enter key as suffix
+          reactToPaste: true, // Also react to paste events (useful for some scanners)
+          scanButtonKeyCode: false, // Disable scan button
+          scanButtonLongPressTime: 500,
+          avgTimeByChar: 30, // Average time between chars for a scan
+          minLength: 4, // Minimum length for a valid scan
           keyCodeMapper: function (oEvent) {
             oEvent.stopImmediatePropagation();
             return onScan.decodeKeyEvent(oEvent);
           },
-          onScan: function (sCode) {
+          onScan: function (sCode, iQty) {
+            // Clean the scanned code (remove any whitespace)
+            sCode = sCode.trim();
+            
+            // Log for debugging
+            console.log('Barcode scanned:', sCode, 'Quantity:', iQty);
+            
+            // Trigger the scan handler
             setTimeout(() => {
               vm.trigger_onscan(sCode);
-            }, 300);
+            }, 100);
           },
+          onScanError: function(oDebug) {
+            console.log('Scan error:', oDebug);
+          }
         });
         
         // Mark document as having scanner attached
         document._scannerAttached = true;
+        
+        console.log('Barcode scanner initialized successfully');
       } catch (error) {
         console.warn('Scanner initialization error:', error.message);
       }
     },
     trigger_onscan(sCode) {
-      if (this.filtered_items.length == 0) {
+      // Store the scanned barcode
+      this.first_search = sCode;
+      this.search = sCode;
+      
+      // Wait for the search to filter items
+      this.$nextTick(() => {
+        if (this.filtered_items.length == 0) {
+          // No item found with this barcode
+          this.eventBus.emit("show_message", {
+            title: `No Item has this barcode "${sCode}"`,
+            color: "error",
+          });
+          frappe.utils.play_sound("error");
+          // Clear the search after showing error
+          setTimeout(() => {
+            this.clearSearch();
+          }, 2000);
+        } else if (this.pos_profile.posa_auto_add_scanned_item) {
+          // Auto-add mode enabled - directly add the item
+          this.auto_add_scanned_item(sCode);
+        } else {
+          // Auto-add mode disabled - use existing behavior (wait for Enter key)
+          this.enter_event();
+        }
+      });
+    },
+    
+    auto_add_scanned_item(barcode) {
+      // Find the exact item matching the barcode
+      let matched_item = null;
+      
+      // First, try exact barcode match
+      for (let item of this.filtered_items) {
+        if (item.item_barcode && item.item_barcode.length > 0) {
+          for (let barcode_data of item.item_barcode) {
+            if (barcode_data.barcode === barcode) {
+              matched_item = { ...item };
+              // Set the UOM from the barcode if specified
+              if (barcode_data.posa_uom) {
+                matched_item.uom = barcode_data.posa_uom;
+              }
+              break;
+            }
+          }
+          if (matched_item) break;
+        }
+      }
+      
+      // If no exact barcode match, check if it's a scale barcode
+      if (!matched_item && barcode.startsWith(this.pos_profile.posa_scale_barcode_start)) {
+        // Handle scale barcode
+        const item_code = barcode.substr(0, 7);
+        matched_item = this.filtered_items.find(item => {
+          return item.item_barcode.some(b => b.barcode === item_code);
+        });
+        
+        if (matched_item) {
+          matched_item = { ...matched_item };
+          // Extract quantity from scale barcode
+          matched_item.qty = this.get_item_qty(barcode);
+        }
+      }
+      
+      // If still no match, try the first filtered item (backward compatibility)
+      if (!matched_item && this.filtered_items.length === 1) {
+        matched_item = { ...this.filtered_items[0] };
+      }
+      
+      if (matched_item) {
+        // Check stock availability
+        if (matched_item.actual_qty === 0 && this.pos_profile.posa_display_items_in_stock) {
+          this.eventBus.emit("show_message", {
+            title: `No stock available for ${matched_item.item_name}`,
+            color: "warning",
+          });
+          this.update_items_details([matched_item]);
+          this.clearSearch();
+          return;
+        }
+        
+        // Ensure UOMs are initialized
+        if (!matched_item.item_uoms || matched_item.item_uoms.length === 0) {
+          matched_item.item_uoms = [{ uom: matched_item.stock_uom, conversion_factor: 1.0 }];
+        }
+        
+        // Handle multi-currency if enabled
+        if (this.pos_profile.posa_allow_multi_currency &&
+            this.selected_currency !== this.pos_profile.currency) {
+          matched_item.base_rate = matched_item.rate;
+          matched_item.base_price_list_rate = matched_item.price_list_rate;
+          matched_item.rate = this.getConvertedRate(matched_item);
+          matched_item.price_list_rate = this.getConvertedRate(matched_item);
+          matched_item.currency = this.selected_currency;
+        }
+        
+        // Set quantity if not already set
+        if (!matched_item.qty || matched_item.qty === 1) {
+          matched_item.qty = Math.abs(this.qty);
+        }
+        
+        // Add item to cart
+        this.eventBus.emit("add_item", matched_item);
+        
+        // Play success sound
+        frappe.utils.play_sound("submit");
+        
+        // Show success message
         this.eventBus.emit("show_message", {
-          title: `No Item has this barcode "${sCode}"`,
+          title: `Added ${matched_item.item_name} to cart`,
+          color: "success",
+        });
+        
+        // Reset quantity
+        this.qty = 1;
+        
+        // Clear search field for next scan
+        this.clearSearch();
+        
+        // Focus back to search field for next scan
+        this.$nextTick(() => {
+          if (this.$refs.debounce_search) {
+            this.$refs.debounce_search.focus();
+          }
+        });
+      } else {
+        // No matching item found
+        this.eventBus.emit("show_message", {
+          title: `No item found for barcode "${barcode}"`,
           color: "error",
         });
         frappe.utils.play_sound("error");
-      } else {
-        this.enter_event();
+        
+        // Clear search after error
+        setTimeout(() => {
+          this.clearSearch();
+        }, 2000);
       }
     },
 
