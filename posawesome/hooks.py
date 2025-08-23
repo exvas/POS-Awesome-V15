@@ -279,7 +279,8 @@ fixtures = [
                     "POS Profile-posa_allow_multi_currency",
                     "POS Profile-custom_show_previous_transactions",
                     "POS Profile-posa_auto_add_scanned_item",
-                    "POS Profile-custom_show_last_custom_rate"
+                    "POS Profile-custom_show_last_custom_rate",
+                    "POS Profile-custom_show_currency_symbols"
                 ]
             ]
         ]
