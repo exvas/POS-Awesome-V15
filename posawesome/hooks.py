@@ -225,6 +225,7 @@ fixtures = [
                     "Sales Order-posa_coupons",
                     "Sales Order Item-posa_row_id",
                     "POS Profile-posa_tax_inclusive",
+                    "POS Profile-posa_allow_create_quotation",
                     "POS Profile-posa_use_percentage_discount",
                     "POS Profile-posa_allow_customer_purchase_order",
                     "POS Profile-posa_allow_print_last_invoice",
@@ -280,7 +281,8 @@ fixtures = [
                     "POS Profile-custom_show_previous_transactions",
                     "POS Profile-posa_auto_add_scanned_item",
                     "POS Profile-custom_show_last_custom_rate",
-                    "POS Profile-custom_show_currency_symbols"
+                    "POS Profile-custom_show_currency_symbols",
+                    "POS Profile-posa_allow_create_quotation"
                 ]
             ]
         ]

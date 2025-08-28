@@ -68,15 +68,18 @@
 
     <!-- Main Invoice Card (contains all invoice content) -->
     <v-card style="max-height: 70vh; height: 70vh"
-      :class="['cards my-0 py-0 mt-3 bg-grey-lighten-5', { 'return-mode': invoiceType === 'Return' }]">
+      :class="['cards my-0 py-0 mt-3 bg-grey-lighten-5', {
+        'return-mode': invoiceType === 'Return',
+        'quotation-mode': invoiceType === 'Quotation'
+      }]">
       <!-- Top Row: Customer Selection and Invoice Type -->
       <v-row align="center" class="items px-2 py-1">
-        <v-col :cols="pos_profile.posa_allow_sales_order ? 9 : 12" class="pb-2 pr-0">
+        <v-col :cols="(pos_profile.posa_allow_sales_order || pos_profile.posa_allow_create_quotation) ? 9 : 12" class="pb-2 pr-0">
           <!-- Customer selection component -->
           <Customer />
         </v-col>
         <!-- Invoice Type Selection (Only shown if sales orders are allowed) -->
-        <v-col v-if="pos_profile.posa_allow_sales_order" cols="3" class="pb-2">
+        <v-col v-if="pos_profile.posa_allow_sales_order || pos_profile.posa_allow_create_quotation" cols="3" class="pb-2">
           <v-select density="compact" hide-details variant="outlined" color="primary" bg-color="white"
             :items="invoiceTypes" :label="frappe._('Type')" v-model="invoiceType"
             :disabled="invoiceType == 'Return'"></v-select>
@@ -541,9 +544,10 @@
               </v-btn>
             </v-col>
             <v-col cols="12">
-              <v-btn block color="success" theme="dark" size="large" prepend-icon="mdi-credit-card"
+              <v-btn block color="success" theme="dark" size="large"
+                :prepend-icon="invoiceType === 'Quotation' ? 'mdi-file-document-outline' : 'mdi-credit-card'"
                 @click="show_payment">
-                {{ __("PAY") }}
+                {{ invoiceType === 'Quotation' ? __("CREATE QUOTATION") : __("PAY") }}
               </v-btn>
             </v-col>
           </v-row>
@@ -584,7 +588,7 @@ export default {
       posa_coupons: [], // Coupons applied
       allItems: [], // All items for offer logic
       discount_percentage_offer_name: null, // Track which offer is applied
-      invoiceTypes: ["Invoice", "Order"], // Types of invoices
+      invoiceTypes: ["Invoice", "Order", "Quotation"], // Types of invoices
       invoiceType: "Invoice", // Current invoice type
       itemsPerPage: 1000, // Items per page in table
       expanded: [], // Array of expanded row IDs
@@ -1292,8 +1296,16 @@ export default {
       this.customer = this.pos_profile.customer;
 
       this.eventBus.emit("set_customer_readonly", false);
+      // Build invoice types array dynamically
+      this.invoiceTypes = ["Invoice"];
+      if (this.pos_profile.posa_allow_sales_order) {
+        this.invoiceTypes.push("Order");
+      }
+      if (this.pos_profile.posa_allow_create_quotation) {
+        this.invoiceTypes.push("Quotation");
+      }
+      
       this.invoiceType = this.pos_profile.posa_default_sales_order ? "Order" : "Invoice";
-      this.invoiceTypes = ["Invoice", "Order"];
     },
 
     // Fetch customer balance from backend
@@ -1637,24 +1649,52 @@ export default {
         doc = { ...this.invoice_doc };
       }
 
-      // Always set these fields first
-      doc.doctype = "Sales Invoice";
-      doc.is_pos = 1;
-      doc.ignore_pricing_rule = 1;
-      doc.company = doc.company || this.pos_profile.company;
-      doc.pos_profile = doc.pos_profile || this.pos_profile.name;
+      // Handle quotation creation
+      if (this.invoiceType === 'Quotation') {
+        doc.doctype = "Quotation";
+        doc.quotation_to = "Customer";
+        doc.order_type = "Sales";
+        doc.party_name = this.customer;
+        doc.customer_name = this.customer_info ? this.customer_info.customer_name : '';
+        doc.posa_invoice_type = 'Quotation'; // Flag for backend processing
+        doc.ignore_pricing_rule = 1;
+        doc.company = doc.company || this.pos_profile.company;
+        
+        // Set valid till date to 30 days from posting date
+        const postingDate = new Date(this.posting_date);
+        const validTillDate = new Date(postingDate);
+        validTillDate.setDate(validTillDate.getDate() + 30);
+        doc.valid_till = validTillDate.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+        
+      } else {
+        // Always set these fields first for Invoice/Order
+        doc.doctype = "Sales Invoice";
+        doc.is_pos = 1;
+        doc.ignore_pricing_rule = 1;
+        doc.company = doc.company || this.pos_profile.company;
+        doc.pos_profile = doc.pos_profile || this.pos_profile.name;
+        doc.customer = this.customer;
+      }
 
-      // Currency related fields
+      // Currency related fields (for all document types)
       doc.currency = this.selected_currency || this.pos_profile.currency;
       doc.conversion_rate = this.exchange_rate || 1;
       doc.plc_conversion_rate = this.exchange_rate || 1;
       doc.price_list_currency = doc.currency;
 
-      // Other fields
+      // Other fields (for all document types)
       doc.campaign = doc.campaign || this.pos_profile.campaign;
       doc.selling_price_list = this.pos_profile.selling_price_list;
-      doc.naming_series = doc.naming_series || this.pos_profile.naming_series;
-      doc.customer = this.customer;
+      
+      // Set naming series and customer based on document type
+      if (this.invoiceType === 'Quotation') {
+        // Quotation specific fields
+        doc.naming_series = doc.naming_series || "QTN-";
+      } else {
+        // Invoice/Order fields
+        doc.naming_series = doc.naming_series || this.pos_profile.naming_series;
+        doc.customer = this.customer;
+      }
 
       // Determine if this is a return invoice
       const isReturn = this.invoiceType === 'Return' || this.invoice_doc.is_return;
@@ -1927,6 +1967,60 @@ export default {
       return items_list;
     },
 
+// Prepare quotation data for direct creation
+    get_quotation_data() {
+      const quotation_data = {
+        doctype: "Quotation",
+        quotation_to: "Customer",
+        party_name: this.customer,
+        customer_name: this.customer_info ? this.customer_info.customer_name : '',
+        order_type: "Sales",
+        company: this.pos_profile.company,
+        currency: this.selected_currency || this.pos_profile.currency,
+        selling_price_list: this.pos_profile.selling_price_list,
+        posting_date: this.posting_date,
+        
+        // Calculate totals
+        total: this.Total,
+        net_total: this.Total,
+        grand_total: this.subtotal,
+        rounded_total: this.roundAmount(this.subtotal),
+        
+        // Add discounts
+        discount_amount: flt(this.additional_discount),
+        additional_discount_percentage: flt(this.additional_discount_percentage),
+        
+        // Add items
+        items: this.get_quotation_items(),
+        
+        // Add notes if any
+        posa_notes: this.invoice_doc.posa_notes || ''
+      };
+      
+      return quotation_data;
+    },
+
+    // Prepare items array for quotation
+    get_quotation_items() {
+      const items_list = [];
+      this.items.forEach((item) => {
+        const quotation_item = {
+          item_code: item.item_code,
+          item_name: item.item_name || item.item_code,
+          description: item.description || item.item_name || item.item_code,
+          qty: flt(item.qty),
+          rate: flt(item.rate),
+          amount: flt(item.qty) * flt(item.rate),
+          uom: item.uom,
+          conversion_factor: item.conversion_factor || 1,
+          discount_percentage: flt(item.discount_percentage),
+          discount_amount: flt(item.discount_amount),
+          price_list_rate: flt(item.price_list_rate)
+        };
+        items_list.push(quotation_item);
+      });
+      return items_list;
+    },
     // Prepare items array for order doc
     get_order_items() {
       const items_list = [];
@@ -2123,6 +2217,55 @@ export default {
     async process_payment() {
       try {
         let invoice_doc;
+        
+        // Handle quotation differently - create, submit and print
+        if (this.invoiceType === 'Quotation') {
+          console.log('Processing Quotation creation');
+          
+          // Create quotation directly via API to avoid document conflicts
+          const quotation_data = this.get_quotation_data();
+          
+          try {
+            const response = await frappe.call({
+              method: "posawesome.posawesome.api.posapp.create_quotation_direct",
+              args: {
+                quotation_data: JSON.stringify(quotation_data)
+              }
+            });
+
+            if (response && response.message) {
+              const quotation_doc = response.message;
+              
+              // Show success message with valid till date
+              const validTillDate = new Date();
+              validTillDate.setDate(validTillDate.getDate() + 30);
+              const formattedDate = validTillDate.toLocaleDateString('en-GB');
+              
+              this.eventBus.emit("show_message", {
+                title: __(`Quotation ${quotation_doc.name} created and submitted successfully. Valid till: ${formattedDate}`),
+                color: "success"
+              });
+
+              // Play success sound
+              frappe.utils.play_sound("submit");
+
+              // Print the quotation
+              this.print_quotation(quotation_doc.name);
+              
+              // Clear invoice
+              this.clear_invoice();
+            }
+          } catch (error) {
+            console.error('Error creating quotation:', error);
+            this.eventBus.emit("show_message", {
+              title: __("Error creating quotation"),
+              color: "error",
+              message: error.message
+            });
+          }
+          return;
+        }
+        
         if (this.invoice_doc.doctype == "Sales Order") {
           console.log('Processing Sales Order payment');
           invoice_doc = await this.process_invoice_from_order();
@@ -2255,6 +2398,94 @@ export default {
       this.reference_no = '';
       this.reference_name = '';
     },
+
+    // Submit and print quotation
+    async submit_and_print_quotation(quotation_doc) {
+      try {
+        console.log('Submitting and printing quotation:', quotation_doc.name);
+        
+        // Ensure quotation is submitted via API call
+        const response = await frappe.call({
+          method: "frappe.client.submit",
+          args: {
+            doc: {
+              doctype: "Quotation",
+              name: quotation_doc.name
+            }
+          }
+        });
+
+        if (response && response.message) {
+          console.log('Quotation submitted successfully:', response.message);
+          
+          // Show success message with valid till date
+          const validTillDate = new Date();
+          validTillDate.setDate(validTillDate.getDate() + 30);
+          const formattedDate = validTillDate.toLocaleDateString('en-GB'); // DD/MM/YYYY format
+          
+          this.eventBus.emit("show_message", {
+            title: __(`Quotation ${quotation_doc.name} created and submitted successfully. Valid till: ${formattedDate}`),
+            color: "success"
+          });
+
+          // Play success sound
+          frappe.utils.play_sound("submit");
+
+          // Print the quotation
+          this.print_quotation(quotation_doc.name);
+          
+        } else {
+          throw new Error("Failed to submit quotation");
+        }
+        
+      } catch (error) {
+        console.error('Error submitting quotation:', error);
+        this.eventBus.emit("show_message", {
+          title: __("Error creating/submitting quotation"),
+          color: "error",
+          message: error.message
+        });
+      }
+    },
+
+    // Print quotation document
+    print_quotation(quotation_name) {
+      try {
+        const print_format = this.pos_profile.print_format_for_online ||
+                           this.pos_profile.print_format ||
+                           "Standard";
+        const letter_head = this.pos_profile.letter_head || 0;
+        
+        const url = frappe.urllib.get_base_url() +
+          "/printview?doctype=Quotation&name=" +
+          quotation_name +
+          "&trigger_print=1" +
+          "&format=" +
+          print_format +
+          "&no_letterhead=" +
+          letter_head;
+          
+        const printWindow = window.open(url, "Print");
+        printWindow.addEventListener(
+          "load",
+          function () {
+            printWindow.print();
+            // printWindow.close(); // Uncomment to auto-close print window
+          },
+          true
+        );
+        
+        console.log('Quotation print window opened:', url);
+        
+      } catch (error) {
+        console.error('Error printing quotation:', error);
+        this.eventBus.emit("show_message", {
+          title: __("Error printing quotation"),
+          color: "error"
+        });
+      }
+    },
+
     // Validate invoice before payment/submit (return logic, quantity, rates, etc)
     async validate() {
       console.log('Starting return validation');
@@ -5010,7 +5241,17 @@ export default {
       this.customer = data.pos_profile.customer;
       this.pos_opening_shift = data.pos_opening_shift;
       this.stock_settings = data.stock_settings;
-      // Increase precision for better handling of small amounts
+      
+      // Build invoice types array dynamically based on POS Profile settings
+      this.invoiceTypes = ["Invoice"];
+      if (this.pos_profile.posa_allow_sales_order) {
+        this.invoiceTypes.push("Order");
+      }
+      if (this.pos_profile.posa_allow_create_quotation) {
+        this.invoiceTypes.push("Quotation");
+      }
+      
+      // Set default invoice type
       this.invoiceType = this.pos_profile.posa_default_sales_order
         ? "Order"
         : "Invoice";
@@ -5321,6 +5562,26 @@ export default {
   top: 0;
   right: 0;
   background-color: #ff5252;
+  color: white;
+  padding: 4px 12px;
+  font-weight: bold;
+  border-bottom-left-radius: 8px;
+  z-index: 1;
+}
+
+/* Blue border and label for quotation mode card */
+.quotation-mode {
+  border: 2px solid #2196F3 !important;
+  position: relative;
+}
+
+/* Label for quotation mode card */
+.quotation-mode::before {
+  content: 'QUOTATION';
+  position: absolute;
+  top: 0;
+  right: 0;
+  background-color: #2196F3;
   color: white;
   padding: 4px 12px;
   font-weight: bold;

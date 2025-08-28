@@ -28,6 +28,7 @@ def validate(doc, method):
 def before_submit(doc, method):
     add_loyalty_point(doc)
     create_sales_order(doc)
+    create_quotation(doc)
     update_coupon(doc, "used")
 
 
@@ -319,3 +320,153 @@ def get_item_price_for_uom(item_code, price_list, uom, customer=None, company=No
                 }
     
     return None
+
+
+def make_quotation(source_name, target_doc=None, ignore_permissions=True):
+    """Create Quotation from Sales Invoice"""
+    def set_missing_values(source, target):
+        target.ignore_pricing_rule = 1
+        target.flags.ignore_permissions = ignore_permissions
+        # Set quotation specific fields
+        target.quotation_to = "Customer"
+        target.order_type = "Sales"
+        # Set valid till date to 30 days from today
+        target.valid_till = add_days(frappe.utils.nowdate(), 30)
+        target.run_method("set_missing_values")
+        target.run_method("calculate_taxes_and_totals")
+
+    def update_item(obj, target, source_parent):
+        target.qty = flt(obj.qty)
+        if hasattr(obj, 'posa_delivery_date') and obj.posa_delivery_date:
+            target.delivery_date = obj.posa_delivery_date
+        elif hasattr(source_parent, 'posa_delivery_date') and source_parent.posa_delivery_date:
+            target.delivery_date = source_parent.posa_delivery_date
+
+    doclist = get_mapped_doc(
+        "Sales Invoice",
+        source_name,
+        {
+            "Sales Invoice": {
+                "doctype": "Quotation",
+                "field_map": {
+                    "customer": "party_name",
+                    "customer_name": "customer_name",
+                },
+            },
+            "Sales Invoice Item": {
+                "doctype": "Quotation Item",
+                "field_map": {
+                    "cost_center": "cost_center",
+                    "warehouse": "warehouse",
+                    "posa_notes": "posa_notes",
+                },
+                "postprocess": update_item,
+            },
+            "Sales Taxes and Charges": {
+                "doctype": "Sales Taxes and Charges",
+                "add_if_empty": True,
+            },
+            "Sales Team": {"doctype": "Sales Team", "add_if_empty": True},
+        },
+        target_doc,
+        set_missing_values,
+        ignore_permissions=ignore_permissions,
+    )
+
+    return doclist
+
+
+def create_quotation(doc):
+    """Create quotation from POS invoice when quotation type is selected"""
+    if (
+        doc.posa_pos_opening_shift
+        and doc.pos_profile
+        and doc.is_pos
+        and frappe.get_value("POS Profile", doc.pos_profile, "posa_allow_create_quotation")
+        and getattr(doc, 'posa_invoice_type', None) == 'Quotation'
+    ):
+        quotation_doc = make_quotation(doc.name)
+        if quotation_doc:
+            quotation_doc.posa_notes = getattr(doc, 'posa_notes', '')
+            quotation_doc.flags.ignore_permissions = True
+            quotation_doc.flags.ignore_account_permission = True
+            quotation_doc.save()
+            
+            # Submit the quotation
+            quotation_doc.submit()
+            
+            # Mark as printed for POS workflow
+            quotation_doc.posa_is_printed = 1
+            quotation_doc.save()
+            
+            url = frappe.utils.get_url_to_form(
+                quotation_doc.doctype, quotation_doc.name
+            )
+            msgprint = "Quotation Created and Submitted at <a href='{0}'>{1}</a>".format(
+                url, quotation_doc.name
+            )
+            frappe.msgprint(
+                _(msgprint), title="Quotation Created", indicator="blue", alert=True
+            )
+            
+            # Store quotation reference for printing
+            doc.posa_quotation_ref = quotation_doc.name
+
+
+@frappe.whitelist()
+def create_quotation_from_invoice(sales_invoice):
+    """Create quotation from sales invoice and submit it"""
+    quotation = make_quotation(sales_invoice, ignore_permissions=True)
+    quotation.flags.ignore_permissions = True
+    quotation.flags.ignore_account_permission = True
+    
+    # Set valid till date to 30 days from today
+    quotation.valid_till = add_days(frappe.utils.nowdate(), 30)
+    
+    # Save first
+    quotation.save()
+    
+    # Then submit
+    quotation.submit()
+    
+    return quotation.as_dict()
+
+
+def load_quotation_print_page(quotation_name, pos_profile):
+    """Load print page for quotation"""
+    print_format = frappe.get_cached_value("POS Profile", pos_profile, "print_format_for_online") or \
+                   frappe.get_cached_value("POS Profile", pos_profile, "print_format") or \
+                   "Standard"
+    
+    letter_head = frappe.get_cached_value("POS Profile", pos_profile, "letter_head") or 0
+    
+    url = (
+        frappe.urllib.get_base_url() +
+        "/printview?doctype=Quotation&name=" +
+        quotation_name +
+        "&trigger_print=1" +
+        "&format=" +
+        print_format +
+        "&no_letterhead=" +
+        str(letter_head)
+    )
+    
+    return url
+
+
+@frappe.whitelist()
+def print_quotation(quotation_name, pos_profile):
+    """Print quotation document"""
+    try:
+        print_url = load_quotation_print_page(quotation_name, pos_profile)
+        return {
+            "success": True,
+            "print_url": print_url,
+            "message": f"Quotation {quotation_name} ready for printing"
+        }
+    except Exception as e:
+        frappe.log_error(f"Error printing quotation {quotation_name}: {str(e)}")
+        return {
+            "success": False,
+            "message": f"Error printing quotation: {str(e)}"
+        }

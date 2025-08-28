@@ -732,6 +732,34 @@ def validate_return_items(original_invoice_name, return_items):
 @frappe.whitelist()
 def update_invoice(data):
     data = json.loads(data)
+    
+    # Handle quotation creation
+    if data.get("doctype") == "Quotation":
+        if data.get("name"):
+            quotation_doc = frappe.get_doc("Quotation", data.get("name"))
+            quotation_doc.update(data)
+        else:
+            quotation_doc = frappe.get_doc(data)
+        
+        # Set quotation specific fields
+        quotation_doc.quotation_to = "Customer"
+        quotation_doc.order_type = "Sales"
+        
+        # Set valid till date to 30 days from today
+        from frappe.utils import add_days, nowdate
+        quotation_doc.valid_till = add_days(nowdate(), 30)
+        
+        quotation_doc.set_missing_values()
+        quotation_doc.flags.ignore_permissions = True
+        quotation_doc.flags.ignore_account_permission = True
+        
+        # Save and submit the quotation
+        quotation_doc.save()
+        quotation_doc.submit()
+        
+        return quotation_doc.as_dict()
+    
+    # Handle regular invoice/order processing
     if data.get("name"):
         invoice_doc = frappe.get_doc("Sales Invoice", data.get("name"))
         invoice_doc.update(data)
@@ -2598,5 +2626,83 @@ def validate_return_items(return_against, items):
 @frappe.whitelist()
 def get_available_currencies():
     """Get list of available currencies from ERPNext"""
-    return frappe.get_all("Currency", fields=["name", "currency_name"], 
+    return frappe.get_all("Currency", fields=["name", "currency_name"],
                          filters={"enabled": 1}, order_by="currency_name")
+
+
+@frappe.whitelist()
+def create_quotation_from_invoice(sales_invoice):
+    """Create quotation from sales invoice"""
+    from posawesome.posawesome.api.invoice import make_quotation
+    quotation = make_quotation(sales_invoice, ignore_permissions=True)
+    quotation.save()
+    return quotation
+
+
+@frappe.whitelist()
+def create_quotation_direct(quotation_data):
+    """Create quotation directly from POS data to avoid document conflicts"""
+    import json
+    from frappe.utils import add_days, nowdate
+    
+    data = json.loads(quotation_data)
+    
+    try:
+        # Create new quotation document
+        quotation_doc = frappe.new_doc("Quotation")
+        
+        # Set basic fields
+        quotation_doc.quotation_to = "Customer"
+        quotation_doc.party_name = data.get("party_name") or data.get("customer")
+        quotation_doc.customer_name = data.get("customer_name", "")
+        quotation_doc.order_type = "Sales"
+        quotation_doc.company = data.get("company")
+        quotation_doc.currency = data.get("currency")
+        quotation_doc.selling_price_list = data.get("selling_price_list")
+        
+        # Set valid till date to 30 days from today
+        quotation_doc.valid_till = add_days(nowdate(), 30)
+        
+        # Set posting date
+        quotation_doc.transaction_date = data.get("posting_date") or nowdate()
+        
+        # Add items
+        if data.get("items"):
+            for item_data in data.get("items"):
+                quotation_item = quotation_doc.append("items", {})
+                quotation_item.item_code = item_data.get("item_code")
+                quotation_item.item_name = item_data.get("item_name")
+                quotation_item.description = item_data.get("description")
+                quotation_item.qty = item_data.get("qty")
+                quotation_item.rate = item_data.get("rate")
+                quotation_item.amount = item_data.get("amount")
+                quotation_item.uom = item_data.get("uom")
+                quotation_item.conversion_factor = item_data.get("conversion_factor", 1)
+                quotation_item.discount_percentage = item_data.get("discount_percentage", 0)
+                quotation_item.discount_amount = item_data.get("discount_amount", 0)
+        
+        # Set totals
+        quotation_doc.total = data.get("total", 0)
+        quotation_doc.net_total = data.get("net_total", 0)
+        quotation_doc.grand_total = data.get("grand_total", 0)
+        quotation_doc.rounded_total = data.get("rounded_total", 0)
+        
+        # Set discount
+        if data.get("discount_amount"):
+            quotation_doc.discount_amount = data.get("discount_amount")
+        if data.get("additional_discount_percentage"):
+            quotation_doc.additional_discount_percentage = data.get("additional_discount_percentage")
+        
+        # Set flags and save
+        quotation_doc.flags.ignore_permissions = True
+        quotation_doc.flags.ignore_mandatory = True
+        quotation_doc.save()
+        
+        # Submit the quotation
+        quotation_doc.submit()
+        
+        return quotation_doc.as_dict()
+        
+    except Exception as e:
+        frappe.log_error(f"Error creating quotation: {str(e)}", "POSAwesome Quotation")
+        frappe.throw(f"Error creating quotation: {str(e)}")
