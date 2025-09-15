@@ -857,11 +857,32 @@ export default {
           payment.amount = 0;
         });
       } else {
-        // Restore previous payments if available
-        if (this.previous_payments.length === this.invoice_doc.payments.length) {
-          this.invoice_doc.payments.forEach((payment, idx) => {
-            payment.amount = this.previous_payments[idx].amount;
-          });
+        // Restore previous payments if available and from the same invoice
+        if (this.previous_payments.length === this.invoice_doc.payments.length && 
+            this.previous_payments.length > 0) {
+          // Check if previous_payments data makes sense for current invoice total
+          const currentTotal = this.pos_profile.disable_rounded_total ? 
+            this.invoice_doc.grand_total : 
+            (this.invoice_doc.rounded_total || this.invoice_doc.grand_total);
+          
+          // Only restore if previous payments have reasonable amounts
+          const totalPreviousPayments = this.previous_payments.reduce((sum, payment) => sum + (payment.amount || 0), 0);
+          
+          // If previous payments total is reasonable compared to current invoice total, restore them
+          if (Math.abs(totalPreviousPayments - currentTotal) < (currentTotal * 0.01) || totalPreviousPayments === currentTotal) {
+            this.invoice_doc.payments.forEach((payment, idx) => {
+              payment.amount = this.previous_payments[idx].amount;
+            });
+          } else {
+            // Previous payments don't match current invoice, use fallback
+            this.invoice_doc.payments.forEach((payment) => {
+              if (payment.mode_of_payment.toLowerCase().includes('cash')) {
+                payment.amount = currentTotal;
+              } else {
+                payment.amount = 0;
+              }
+            });
+          }
         } else {
           // Fallback: set cash to total, others to 0
           const invoice_total = this.pos_profile.disable_rounded_total ? 
@@ -1617,6 +1638,8 @@ setTodayAsDeliveryDate() {
         }
         this.is_credit_sale = false;
         this.is_write_off_change = false;
+        // Clear previous payments array to avoid stale data in new invoice
+        this.previous_payments = [];
         if (invoice_doc.is_return) {
           this.is_return = true;
           // Reset all payment amounts to zero for returns
