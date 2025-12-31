@@ -230,12 +230,20 @@
 
           <!-- Current Incoming Rate Column Template -->
           <template v-slot:item.incoming_rate="{ item }">
-            <div class="d-flex align-center">
-              <span v-if="item.incoming_rate" class="text-info">
+            <div class="d-flex align-center justify-center" style="position: relative;">
+              <v-icon
+                size="small"
+                :icon="show_incoming_rate ? 'mdi-eye' : 'mdi-eye-off'"
+                @click.stop="toggleIncomingRateVisibility"
+                style="cursor: pointer; position: absolute; left: 0;"
+                :color="show_incoming_rate ? 'primary' : 'grey'"
+              ></v-icon>
+              <span v-if="show_incoming_rate && item.incoming_rate" class="text-info" style="margin-left: 24px;">
                 <span v-if="pos_profile.custom_show_currency_symbols">{{ currencySymbol(pos_profile.currency) }}</span>
                 {{ formatCurrency(item.incoming_rate) }}
               </span>
-              <span v-else class="text-grey">-</span>
+              <span v-else-if="show_incoming_rate" class="text-grey" style="margin-left: 24px;">-</span>
+              <span v-else class="text-grey" style="margin-left: 24px;">****</span>
             </div>
           </template>
 
@@ -606,6 +614,7 @@ export default {
       selected_currency: "", // Currently selected currency
       exchange_rate: 1, // Current exchange rate
       available_currencies: [], // List of available currencies
+      show_incoming_rate: false, // Toggle visibility of Inc.Rate values
     };
   },
 
@@ -790,6 +799,10 @@ export default {
         item._description_modified = true;
         this.$forceUpdate();
       }
+    },
+    // Toggle visibility of incoming rate values
+    toggleIncomingRateVisibility() {
+      this.show_incoming_rate = !this.show_incoming_rate;
     },
     open_previous_transactions() {
       this.eventBus.emit("open_previous_transactions", {
