@@ -21,6 +21,12 @@ def validate_filters(filters):
 	if not filters.get("company"):
 		frappe.throw(_("Please select a Company"))
 	
+	if not filters.get("from_date"):
+		frappe.throw(_("From Date is required"))
+	
+	if not filters.get("to_date"):
+		frappe.throw(_("To Date is required"))
+	
 	if filters.get("from_date") and filters.get("to_date"):
 		if getdate(filters.get("from_date")) > getdate(filters.get("to_date")):
 			frappe.throw(_("From Date cannot be greater than To Date"))
@@ -324,10 +330,8 @@ def get_conditions(filters):
 	if filters.get("company"):
 		conditions += " AND company = %(company)s"
 	
-	if filters.get("from_date"):
-		conditions += " AND posting_date >= %(from_date)s"
-	else:
-		frappe.throw(_("From Date is required"))
+	# Don't filter by from_date here - we need all historical data to calculate opening balance
+	# The date filtering is done in get_item_warehouse_map function
 	
 	if filters.get("to_date"):
 		conditions += " AND posting_date <= %(to_date)s"
