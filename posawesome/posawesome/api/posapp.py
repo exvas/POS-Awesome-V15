@@ -2557,6 +2557,7 @@ def get_seearch_items_conditions(item_code, serial_no, batch_no, barcode):
 @frappe.whitelist()
 def create_sales_invoice_from_order(sales_order):
     sales_invoice = make_sales_invoice(sales_order, ignore_permissions=True)
+    sales_invoice.update_stock = 1
     sales_invoice.save()
     return sales_invoice
 
@@ -2579,6 +2580,7 @@ def update_invoice_from_order(data):
      data = json.loads(data)
      invoice_doc = frappe.get_doc("Sales Invoice", data.get("name"))
      invoice_doc.update(data)
+     invoice_doc.update_stock = 1
      invoice_doc.save()
      return invoice_doc
 
