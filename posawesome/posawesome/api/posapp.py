@@ -771,7 +771,11 @@ def update_invoice(data):
     
     # Set missing values first
     invoice_doc.set_missing_values()
-    
+
+    # Always trigger stock update for POS invoices (set_missing_values may reset it)
+    if invoice_doc.is_pos and not invoice_doc.get("posa_delivery_date"):
+        invoice_doc.update_stock = 1
+
     # Handle disable_rounded_total setting from POS profile
     if data.get("pos_profile"):
         pos_profile = frappe.get_doc("POS Profile", data.get("pos_profile"))
@@ -847,6 +851,8 @@ def submit_invoice(invoice, data):
         invoice_doc.update(invoice)
     if invoice.get("posa_delivery_date"):
         invoice_doc.update_stock = 0
+    else:
+        invoice_doc.update_stock = 1
     mop_cash_list = [
         i.mode_of_payment
         for i in invoice_doc.payments

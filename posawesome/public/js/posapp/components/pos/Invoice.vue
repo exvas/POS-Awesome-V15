@@ -1687,6 +1687,10 @@ export default {
         doc.company = doc.company || this.pos_profile.company;
         doc.pos_profile = doc.pos_profile || this.pos_profile.name;
         doc.customer = this.customer;
+        // Always trigger stock update for POS invoices (unless future delivery)
+        if (!doc.posa_delivery_date) {
+          doc.update_stock = 1;
+        }
       }
 
       // Currency related fields (for all document types)
