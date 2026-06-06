@@ -6,11 +6,11 @@
         @click.stop="handleNavClick" 
         class="text-grey"
       ></v-app-bar-nav-icon>
-      <v-img src="/assets/posawesome/js/posapp/components/pos/pos.png" alt="POS Awesome" max-width="32" class="mr-2"
+      <v-img :src="company_img" alt="Company Logo" max-width="32" class="mr-2"
         color="primary"></v-img>
       <v-toolbar-title @click="go_desk" style="cursor: pointer" class="text-uppercase text-primary">
         <span class="font-weight-light"></span>
-        <span>EXTRA APPAREL STORE</span>
+        <span>{{ company }}</span>
       </v-toolbar-title>
 
       <v-spacer></v-spacer>
@@ -145,8 +145,8 @@ export default {
       snack: false,
       snackColor: '',
       snackText: '',
-      company: 'POS Awesome',
-      company_img: '/assets/erpnext/images/erpnext-logo.svg',
+      company: '',
+      company_img: '/files/sanam_favicon.png',
       pos_profile: '',
       freeze: false,
       freezeTitle: '',
