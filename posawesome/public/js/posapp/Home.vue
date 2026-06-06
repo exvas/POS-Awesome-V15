@@ -31,6 +31,9 @@ export default {
       this.$nextTick(function () {
         $('.page-head').remove();
         $('.navbar.navbar-default.navbar-fixed-top').remove();
+        // Frappe v16 sidebar
+        $('.body-sidebar-container').hide();
+        $('.sticky-top').hide();
       });
     },
   },
