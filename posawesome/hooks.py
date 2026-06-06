@@ -6,10 +6,17 @@ app_name = "posawesome"
 app_title = "POS Awesome"
 app_publisher = "Youssef Restom"
 app_description = "POS Awesome"
-app_icon = "octicon octicon-file-directory"
-app_color = "grey"
 app_email = "youssef@totrox.com"
 app_license = "GPLv3"
+
+add_to_apps_screen = [
+    {
+        "name": app_name,
+        "logo": "/assets/posawesome/icons/desktop_icons/solid/pos_awesome.svg",
+        "title": app_title,
+        "route": "/app/pos-awesome",
+    }
+]
 
 # Includes in <head>
 # ------------------
