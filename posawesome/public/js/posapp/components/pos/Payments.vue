@@ -473,14 +473,8 @@
               ></v-date-picker>
             </v-menu>
           </v-col>
-          <v-col cols="6" v-if="invoice_doc">
-          <v-switch
-            v-model="is_redeem"
-            :label="frappe._('Redeem')"
-          ></v-switch>
-        </v-col>
-
-        <v-col cols="6" v-if="invoice_doc && is_redeem">
+          <!-- Redeem toggle removed -->
+        <v-col cols="6" v-if="false">
         <v-text-field
           density="compact"
           variant="outlined"
