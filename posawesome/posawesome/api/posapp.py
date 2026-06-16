@@ -252,9 +252,12 @@ def update_opening_shift_data(data, pos_profile):
 
 
 def get_stock_availability(item_code, warehouse):
-    """Get stock availability along with incoming rate and last incoming rate from Stock Ledger Entry"""
-    
-    # Get the latest stock ledger entry for current stock quantity
+    """Get stock availability along with incoming rate from Stock Ledger Entry"""
+
+    # Get the latest SLE for qty and cumulative stock_value.
+    # stock_value / qty_after_transaction gives the true current weighted-average
+    # valuation rate and stays correct even when LCV revaluation entries are posted
+    # (Bin.valuation_rate can lag behind LCV updates in some ERPNext edge cases).
     current_stock_data = frappe.db.get_value(
         "Stock Ledger Entry",
         filters={
@@ -262,31 +265,39 @@ def get_stock_availability(item_code, warehouse):
             "warehouse": warehouse,
             "is_cancelled": 0,
         },
-        fieldname=["qty_after_transaction", "incoming_rate"],
+        fieldname=["qty_after_transaction", "stock_value"],
         order_by="posting_date desc, posting_time desc, creation desc",
         as_dict=True
     )
-    
-    # Get the last incoming rate (where incoming_rate > 0)
-    # uom = frappe.db.get_value("Item", item_code, "stock_uom")
-    # buy_price_list = frappe.db.get_single_value("Buying Settings", "buying_price_list")
-    # last_incoming_data = frappe.db.get_value("Item Price", {"item_code": item_code, "price_list": buy_price_list,"uom": uom}, "price_list_rate")
-    # if not last_incoming_data:
-    last_incoming_data = frappe.db.get_value("Bin", {"item_code": item_code, "warehouse": warehouse}, "valuation_rate")
-    
+
+    # Keep Bin.valuation_rate as a fallback
+    last_incoming_data = frappe.db.get_value(
+        "Bin", {"item_code": item_code, "warehouse": warehouse}, "valuation_rate"
+    )
+
     if current_stock_data:
+        qty = current_stock_data.qty_after_transaction or 0.0
+        # Derive valuation rate from the running stock_value in SLE (authoritative
+        # source that reflects LCV revaluations immediately after they are posted).
+        if qty:
+            sle_valuation_rate = (current_stock_data.stock_value or 0.0) / qty
+        else:
+            sle_valuation_rate = 0.0
+
+        incoming_rate = sle_valuation_rate or last_incoming_data or 0.0
+
         result = {
-            "actual_qty": current_stock_data.qty_after_transaction or 0.0,
-            "incoming_rate": last_incoming_data or 0.0,
-            "last_incoming_rate": last_incoming_data if last_incoming_data else 0.0
+            "actual_qty": qty,
+            "incoming_rate": incoming_rate,
+            "last_incoming_rate": last_incoming_data if last_incoming_data else 0.0,
         }
     else:
         result = {
             "actual_qty": 0.0,
             "incoming_rate": 0.0,
-            "last_incoming_rate": last_incoming_data if last_incoming_data else 0.0
+            "last_incoming_rate": last_incoming_data if last_incoming_data else 0.0,
         }
-    
+
     return result
 
 
