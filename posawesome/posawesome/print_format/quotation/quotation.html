@@ -1,0 +1,247 @@
+<!-- Header -->
+<div id="header-html" class="letter-head-container">
+    {% if letter_head and not no_letterhead %}
+        <div class="letter-head">{{ letter_head }}</div>
+    {% endif %}
+</div>
+
+<div class="print-format quotation-print">
+
+<!-- Quotation Header -->
+<table class="header-table">
+    <tr>
+        <td class="company-info" style="width: 65%;">
+            <div class="company-name">{{ doc.company }}</div>
+            {% if doc.company_address %}
+                {% set addr = frappe.get_doc("Address", doc.company_address) %}
+                <div class="company-address">
+                    {{ addr.address_line1 or "" }}{% if addr.address_line2 %}, {{ addr.address_line2 }}{% endif %}<br>
+                    {{ addr.city or "" }}{% if addr.state %}, {{ addr.state }}{% endif %}{% if addr.pincode %}, {{ addr.pincode }}{% endif %}<br>
+                    {% if addr.phone %}Phone: {{ addr.phone }} | {% endif %}{% if addr.email_id %}{{ addr.email_id }}{% endif %}
+                </div>
+            {% endif %}
+            {% if doc.company_gstin %}
+                <div><strong>GSTIN:</strong> {{ doc.company_gstin }}</div>
+            {% endif %}
+        </td>
+        <td class="doc-info" style="width: 35%; text-align: right;">
+            <h2 class="quotation-title">QUOTATION</h2>
+            <table class="doc-info-table">
+                <tr><td><strong>Quotation #:</strong></td><td>{{ doc.name }}</td></tr>
+                <tr><td><strong>Date:</strong></td><td>{{ doc.get_formatted("transaction_date") }}</td></tr>
+                <tr><td><strong>Valid Till:</strong></td><td>{{ doc.get_formatted("valid_till") }}</td></tr>
+            </table>
+        </td>
+    </tr>
+</table>
+
+<hr class="section-hr">
+
+<!-- Party Details -->
+<table class="party-table">
+    <tr>
+        <td class="party-section" style="width: 50%;">
+            <div class="section-label">Bill To:</div>
+            <div class="party-name">{{ doc.customer_name }}</div>
+            {% if doc.customer_address %}
+                {% set cust_addr = frappe.get_doc("Address", doc.customer_address) %}
+                <div class="party-address">
+                    {{ cust_addr.address_line1 or "" }}{% if cust_addr.address_line2 %}, {{ cust_addr.address_line2 }}{% endif %}<br>
+                    {{ cust_addr.city or "" }}{% if cust_addr.state %}, {{ cust_addr.state }}{% endif %}{% if cust_addr.pincode %} - {{ cust_addr.pincode }}{% endif %}<br>
+                    {% if cust_addr.phone %}Phone: {{ cust_addr.phone }}<br>{% endif %}
+                    {% if cust_addr.email_id %}{{ cust_addr.email_id }}{% endif %}
+                </div>
+            {% endif %}
+            {% if doc.customer_gstin %}
+                <div><strong>GSTIN:</strong> {{ doc.customer_gstin }}</div>
+            {% endif %}
+        </td>
+        <td class="party-section" style="width: 50%;">
+            <div class="section-label">Shipping To:</div>
+            {% if doc.shipping_address_name %}
+                {% set ship_addr = frappe.get_doc("Address", doc.shipping_address_name) %}
+                <div class="party-address">
+                    <strong>{{ doc.shipping_address_name }}</strong><br>
+                    {{ ship_addr.address_line1 or "" }}{% if ship_addr.address_line2 %}, {{ ship_addr.address_line2 }}{% endif %}<br>
+                    {{ ship_addr.city or "" }}{% if ship_addr.state %}, {{ ship_addr.state }}{% endif %}{% if ship_addr.pincode %} - {{ ship_addr.pincode }}{% endif %}
+                </div>
+            {% else %}
+                <div class="text-muted">Same as Billing</div>
+            {% endif %}
+        </td>
+    </tr>
+</table>
+
+<!-- Items Table -->
+<table class="items-table">
+    <thead>
+        <tr>
+            <th style="width: 4%;">#</th>
+            <th style="width: 38%;">Item / Description</th>
+            <th style="width: 10%;">Qty</th>
+            <th style="width: 10%;">UOM</th>
+            <th style="width: 14%;">Rate</th>
+            <th style="width: 10%;">Disc %</th>
+            <th style="width: 14%;">Amount</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in doc.items %}
+        <tr>
+            <td style="text-align: center;">{{ loop.index }}</td>
+            <td>
+                <strong>{{ item.item_name }}</strong>
+                {% if item.item_name != item.item_code %}<br><small>{{ item.item_code }}</small>{% endif %}
+                {% if item.description %}<br><small>{{ item.description }}</small>{% endif %}
+            </td>
+            <td style="text-align: center;">{{ item.qty }}</td>
+            <td style="text-align: center;">{{ item.uom }}</td>
+            <td style="text-align: right;">{{ item.get_formatted("rate") }}</td>
+            <td style="text-align: center;">{{ "%.2f"|format(item.discount_percentage or 0) }}%</td>
+            <td style="text-align: right;">{{ item.get_formatted("amount") }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<!-- Totals Section -->
+<table class="totals-table">
+    <tr>
+        <td style="width: 65%;">
+            <div class="terms-section">
+                <strong>Terms & Conditions:</strong><br>
+                {% if doc.terms %}
+                    {{ doc.terms }}
+                {% else %}
+                    <ol>
+                        <li>Prices are valid till {{ doc.get_formatted("valid_till") or "the date mentioned above" }}.</li>
+                        <li>Delivery within 7-14 business days after order confirmation.</li>
+                        <li>Payment: 50% advance, 50% on delivery.</li>
+                        <li>Taxes as applicable.</li>
+                    </ol>
+                {% endif %}
+            </div>
+        </td>
+        <td style="width: 35%;">
+            <table class="totals-detail-table">
+                <tr>
+                    <td><strong>Net Total</strong></td>
+                    <td style="text-align: right;">{{ doc.get_formatted("net_total") }}</td>
+                </tr>
+                {% if doc.discount_amount %}
+                <tr>
+                    <td>Discount</td>
+                    <td style="text-align: right;">{{ doc.get_formatted("discount_amount") }}</td>
+                </tr>
+                {% endif %}
+                {% for tax in doc.taxes %}
+                <tr>
+                    <td>{{ tax.description or tax.account_head }}</td>
+                    <td style="text-align: right;">{{ tax.get_formatted("tax_amount") }}</td>
+                </tr>
+                {% endfor %}
+                {% if doc.additional_discount_percentage %}
+                <tr>
+                    <td>Additional Discount</td>
+                    <td style="text-align: right;">{{ "%.2f"|format(doc.discount_amount) }}</td>
+                </tr>
+                {% endif %}
+                <tr class="grand-total">
+                    <td><strong>Grand Total</strong></td>
+                    <td style="text-align: right;"><strong>{{ doc.get_formatted("grand_total") }}</strong></td>
+                </tr>
+                <tr>
+                    <td><strong>Rounded Total</strong></td>
+                    <td style="text-align: right;"><strong>{{ doc.get_formatted("rounded_total") }}</strong></td>
+                </tr>
+            </table>
+            <div class="amount-in-words" style="margin-top: 8px;">
+                <em>{{ frappe.utils.money_in_words(doc.rounded_total or doc.grand_total, doc.currency) }}</em>
+            </div>
+        </td>
+    </tr>
+</table>
+
+<!-- Signature Section -->
+<table class="signature-table">
+    <tr>
+        <td style="width: 50%;">
+            <strong>Prepared By:</strong><br>
+            {{ doc.owner }}
+        </td>
+        <td style="width: 50%; text-align: right;">
+            <strong>For {{ doc.company }}</strong><br><br><br>
+            <div style="border-top: 1px solid #000; display: inline-block; min-width: 150px;">
+                Authorized Signatory
+            </div>
+        </td>
+    </tr>
+</table>
+
+</div>
+
+<!-- Footer -->
+<div id="footer-html" class="letter-footer-container">
+    {% if footer %}
+        <div class="letter-footer">{{ footer }}</div>
+    {% endif %}
+</div>
+
+<style>
+.print-format.quotation-print {
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-size: 10pt;
+    line-height: 1.4;
+    color: #333;
+    padding: 0;
+}
+
+.letter-head-container { margin-bottom: 10px; }
+.letter-head-container .letter-head { width: 100%; }
+
+.header-table { width: 100%; margin-bottom: 8px; }
+.company-info .company-name { font-size: 16pt; font-weight: bold; color: #222; }
+.company-address { font-size: 9pt; color: #555; margin-top: 4px; }
+
+.doc-info .quotation-title { font-size: 18pt; font-weight: bold; color: #1a237e; margin: 0 0 6px 0; text-transform: uppercase; letter-spacing: 2px; }
+.doc-info-table { width: 100%; }
+.doc-info-table td { font-size: 9pt; padding: 2px 4px; }
+.doc-info-table td:first-child { text-align: right; white-space: nowrap; }
+
+.section-hr { border: 0; border-top: 2px solid #1a237e; margin: 8px 0; }
+
+.party-table { width: 100%; margin-bottom: 10px; border: 1px solid #ddd; }
+.party-table td { padding: 10px; vertical-align: top; }
+.section-label { font-size: 8pt; font-weight: bold; color: #666; text-transform: uppercase; margin-bottom: 4px; }
+.party-name { font-size: 12pt; font-weight: bold; }
+.party-address { font-size: 9pt; color: #555; margin-top: 4px; }
+
+.items-table { width: 100%; border-collapse: collapse; margin-bottom: 0; }
+.items-table th { background: #1a237e; color: #fff; padding: 8px 6px; font-size: 9pt; text-transform: uppercase; }
+.items-table td { padding: 6px; font-size: 9pt; border-bottom: 1px solid #eee; vertical-align: top; }
+
+.totals-table { width: 100%; margin-top: 12px; }
+.totals-table td { vertical-align: top; padding: 8px; }
+.terms-section { font-size: 8.5pt; color: #555; }
+.terms-section ol { margin: 4px 0 0 18px; padding: 0; }
+
+.totals-detail-table { width: 100%; border-collapse: collapse; }
+.totals-detail-table td { padding: 4px 8px; font-size: 9pt; border-bottom: 1px solid #eee; }
+.totals-detail-table .grand-total td { font-size: 11pt; border-bottom: 2px solid #1a237e; border-top: 2px solid #1a237e; padding-top: 6px; padding-bottom: 6px; }
+
+.amount-in-words { font-size: 8.5pt; color: #555; border-top: 1px dashed #ccc; padding-top: 4px; }
+
+.signature-table { width: 100%; margin-top: 30px; font-size: 9pt; }
+
+.letter-footer-container { margin-top: 20px; }
+.letter-footer-container .letter-footer { width: 100%; }
+
+.text-muted { color: #999; }
+.text-right { text-align: right; }
+.text-center { text-align: center; }
+
+@media print {
+    .print-format.quotation-print { padding: 0; }
+    .letter-head-container { margin-bottom: 5px; }
+}
+</style>

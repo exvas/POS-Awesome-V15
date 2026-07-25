@@ -12,7 +12,7 @@ from erpnext.accounts.doctype.sales_invoice.sales_invoice import get_bank_cash_a
 from erpnext.stock.get_item_details import get_item_details
 from erpnext.accounts.doctype.pos_profile.pos_profile import get_item_groups
 from frappe.utils.background_jobs import enqueue
-from erpnext.accounts.party import get_party_bank_account
+from erpnext.accounts.doctype.bank_account.bank_account import get_party_bank_account
 from erpnext.stock.doctype.batch.batch import (
     get_batch_no,
     get_batch_qty,
@@ -31,6 +31,19 @@ from posawesome.posawesome.doctype.delivery_charges.delivery_charges import (
     get_applicable_delivery_charges as _get_applicable_delivery_charges,
 )
 from frappe.utils.caching import redis_cache
+
+def _can_view_incoming_rate(pos_profile_name):
+    if not pos_profile_name:
+        return True
+    permissions = frappe.get_all(
+        "POS Profile User Permission",
+        filters={"parent": pos_profile_name, "user": frappe.session.user},
+        fields=["show_incoming_rate"],
+        limit=1
+    )
+    if not permissions:
+        return False
+    return bool(permissions[0].show_incoming_rate)
 
 @frappe.whitelist()
 def get_all_previous_transactions(from_date=None, to_date=None, customer=None, invoice_no=None, pos_profile=None, limit=100):
@@ -488,6 +501,7 @@ def get_items(
                     item_stock_qty = stock_data["actual_qty"]
                     incoming_rate = stock_data["incoming_rate"]
                     last_incoming_rate = stock_data["last_incoming_rate"]
+                can_view_inc_rate = _can_view_incoming_rate(pos_profile.get("name"))
                 rack_info = {}
                 custom_show_logical_rack = pos_profile.get("custom_show_logical_rack")  # Add this field to POS Profile
                 if custom_show_logical_rack:
@@ -531,8 +545,8 @@ def get_items(
                             "attributes": attributes or "",
                             "item_attributes": item_attributes or "",
                             # Enhanced fields including last incoming rate
-                            "incoming_rate": incoming_rate or 0,
-                            "last_incoming_rate": last_incoming_rate or 0,
+                            "incoming_rate": incoming_rate if can_view_inc_rate else 0,
+                            "last_incoming_rate": last_incoming_rate if can_view_inc_rate else 0,
                             "oem_part_number": item.custom_oem_part_number or "",
                         }
                     )
@@ -1242,6 +1256,7 @@ def get_items_details(pos_profile, items_data):
         pos_profile = json.loads(pos_profile)
         items_data = json.loads(items_data)
         warehouse = pos_profile.get("warehouse")
+        can_view_inc_rate = _can_view_incoming_rate(pos_profile.get("name"))
         custom_show_logical_rack = pos_profile.get("custom_show_logical_rack")
         show_last_customer_rate = pos_profile.get("custom_show_last_custom_rate", 0)
         customer = pos_profile.get("customer")
@@ -1367,7 +1382,7 @@ def get_items_details(pos_profile, items_data):
                         "has_batch_no": has_batch_no,
                         "has_serial_no": has_serial_no,
                         # Enhanced fields including last incoming rate
-                        "incoming_rate": stock_data["incoming_rate"],
+                        "incoming_rate": stock_data["incoming_rate"] if can_view_inc_rate else 0,
                         "last_customer_rate": last_customer_rates,
                         "oem_part_number": item_details.custom_oem_part_number if item_details else "",
                     }
@@ -1425,7 +1440,7 @@ def get_item_detail(item, doc=None, warehouse=None, price_list=None):
     if item.get("is_stock_item") and warehouse:
         stock_data = get_stock_availability(item_code, warehouse)
         res["actual_qty"] = stock_data["actual_qty"]
-        res["incoming_rate"] = stock_data["incoming_rate"]
+        res["incoming_rate"] = stock_data["incoming_rate"] if _can_view_incoming_rate(item.get("pos_profile")) else 0
 
     # Get enhanced item details
     item_details = frappe.db.get_value(

@@ -282,8 +282,34 @@ fixtures = [
                     "POS Profile-posa_auto_add_scanned_item",
                     "POS Profile-custom_show_last_custom_rate",
                     "POS Profile-custom_show_currency_symbols",
-                    "POS Profile-posa_allow_create_quotation"
+                    "POS Profile-posa_allow_create_quotation",
+                    "POS Profile-custom_section_break_wkfyl",
+                    "POS Profile-custom_pos_incoming_rate_permissions"
                 ]
+            ]
+        ]
+    },
+    {
+        "doctype": "DocType",
+        "filters": [
+            [
+                "name",
+                "in",
+                (
+                    "POS Profile User Permission",
+                )
+            ]
+        ]
+    },
+    {
+        "doctype": "Print Format",
+        "filters": [
+            [
+                "name",
+                "in",
+                (
+                    "POS Quotation",
+                )
             ]
         ]
     }

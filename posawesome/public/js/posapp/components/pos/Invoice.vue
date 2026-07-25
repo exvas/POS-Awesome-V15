@@ -623,6 +623,13 @@ export default {
   },
 
   computed: {
+    canViewIncomingRate() {
+      if (!this.pos_profile?.custom_show_incoming_rate) return false;
+      const permissions = this.pos_profile?.custom_pos_incoming_rate_permissions;
+      if (!permissions || permissions.length === 0) return true;
+      const userPerm = permissions.find(p => p.user === frappe.session.user);
+      return userPerm ? !!userPerm.show_incoming_rate : false;
+    },
     items_headers() {
       const headers = [
         {
@@ -638,7 +645,7 @@ export default {
       ];
 
       // Add current incoming rate column if enabled in POS profile
-      if (this.pos_profile?.custom_show_incoming_rate) {
+      if (this.canViewIncomingRate) {
         headers.splice(-1, 0, {
           title: __("Inc.Rate"),
           key: "incoming_rate",
@@ -800,8 +807,9 @@ export default {
         this.$forceUpdate();
       }
     },
-    // Toggle visibility of incoming rate values
+    // Toggle visibility of incoming rate values (only for authorized users)
     toggleIncomingRateVisibility() {
+      if (!this.canViewIncomingRate) return;
       this.show_incoming_rate = !this.show_incoming_rate;
     },
     open_previous_transactions() {
