@@ -283,6 +283,8 @@ fixtures = [
                     "POS Profile-custom_show_last_custom_rate",
                     "POS Profile-custom_show_currency_symbols",
                     "POS Profile-posa_allow_create_quotation",
+                    "POS Profile-posa_quotation_print_format",
+                    "POS Profile-posa_quotation_terms",
                     "POS Profile-custom_section_break_wkfyl",
                     "POS Profile-custom_pos_incoming_rate_permissions"
                 ]

@@ -2696,10 +2696,10 @@ def create_quotation_direct(quotation_data):
         
         # Set valid till date to 30 days from today
         quotation_doc.valid_till = add_days(nowdate(), 30)
-        
+
         # Set posting date
         quotation_doc.transaction_date = data.get("posting_date") or nowdate()
-        
+
         # Add items
         if data.get("items"):
             for item_data in data.get("items"):
@@ -2726,7 +2726,25 @@ def create_quotation_direct(quotation_data):
             quotation_doc.discount_amount = data.get("discount_amount")
         if data.get("additional_discount_percentage"):
             quotation_doc.additional_discount_percentage = data.get("additional_discount_percentage")
-        
+
+        # Terms and Conditions selected in POS (falls back to the POS Profile default).
+        # Set after items/totals so templates using Jinja can reference them.
+        tc_name = data.get("tc_name")
+        if tc_name and frappe.db.exists("Terms and Conditions", tc_name):
+            quotation_doc.tc_name = tc_name
+            try:
+                from erpnext.setup.doctype.terms_and_conditions.terms_and_conditions import (
+                    get_terms_and_conditions,
+                )
+
+                quotation_doc.terms = get_terms_and_conditions(
+                    tc_name, quotation_doc.as_dict()
+                )
+            except Exception:
+                quotation_doc.terms = frappe.db.get_value(
+                    "Terms and Conditions", tc_name, "terms"
+                )
+
         # Set flags and save
         quotation_doc.flags.ignore_permissions = True
         quotation_doc.flags.ignore_mandatory = True

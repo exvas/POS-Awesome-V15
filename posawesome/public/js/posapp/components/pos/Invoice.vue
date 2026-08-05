@@ -86,6 +86,22 @@
         </v-col>
       </v-row>
 
+      <!-- Quotation Options (Terms and Print Format) - only when creating a Quotation -->
+      <v-row align="center" class="items px-2 py-1 mt-0 pt-0" v-if="invoiceType === 'Quotation'">
+        <!-- Terms and Conditions Selection (defaults from POS Profile, changeable per quotation) -->
+        <v-col cols="6" class="pb-2">
+          <v-autocomplete density="compact" clearable auto-select-first variant="outlined" color="primary"
+            bg-color="white" hide-details :label="frappe._('Terms and Conditions')" v-model="quotation_tc_name"
+            :items="terms_and_conditions" :no-data-text="__('Terms not found')"></v-autocomplete>
+        </v-col>
+        <!-- Print Format Selection for the quotation printout -->
+        <v-col cols="6" class="pb-2">
+          <v-autocomplete density="compact" clearable auto-select-first variant="outlined" color="primary"
+            bg-color="white" hide-details :label="frappe._('Print Format')" v-model="quotation_print_format"
+            :items="quotation_print_formats" :no-data-text="__('Print formats not found')"></v-autocomplete>
+        </v-col>
+      </v-row>
+
       <!-- Delivery Charges Section (Only if enabled in POS profile) -->
       <v-row align="center" class="items px-2 py-1 mt-0 pt-0" v-if="pos_profile.posa_use_delivery_charges">
         <v-col cols="8" class="pb-0 mb-0 pr-0 pt-0">
@@ -615,6 +631,10 @@ export default {
       exchange_rate: 1, // Current exchange rate
       available_currencies: [], // List of available currencies
       show_incoming_rate: false, // Toggle visibility of Inc.Rate values
+      terms_and_conditions: [], // Available Terms and Conditions for quotations
+      quotation_tc_name: null, // Terms and Conditions selected for this quotation
+      quotation_print_formats: [], // Available Quotation print formats
+      quotation_print_format: null, // Print format selected for this quotation
     };
   },
 
@@ -1325,7 +1345,13 @@ export default {
       if (this.pos_profile.posa_allow_create_quotation) {
         this.invoiceTypes.push("Quotation");
       }
-      
+
+      // Reset quotation options back to the POS Profile defaults
+      this.quotation_tc_name = this.pos_profile.posa_quotation_terms || null;
+      this.quotation_print_format =
+        this.pos_profile.posa_quotation_print_format ||
+        (this.quotation_print_formats.includes("Quotation") ? "Quotation" : null);
+
       this.invoiceType = this.pos_profile.posa_default_sales_order ? "Order" : "Invoice";
     },
 
@@ -1992,6 +2018,41 @@ export default {
       return items_list;
     },
 
+    // Load Terms and Conditions / Print Format options and apply POS Profile defaults
+    load_quotation_options() {
+      frappe.db
+        .get_list("Terms and Conditions", {
+          fields: ["name"],
+          filters: { disabled: 0 },
+          limit: 1000,
+          order_by: "name",
+        })
+        .then((data) => {
+          this.terms_and_conditions = (data || []).map((r) => r.name);
+          this.quotation_tc_name = this.pos_profile.posa_quotation_terms || null;
+        })
+        .catch((error) => {
+          console.error("Error loading terms and conditions:", error);
+        });
+
+      frappe.db
+        .get_list("Print Format", {
+          fields: ["name"],
+          filters: { doc_type: "Quotation", disabled: 0 },
+          limit: 1000,
+          order_by: "name",
+        })
+        .then((data) => {
+          this.quotation_print_formats = (data || []).map((r) => r.name);
+          this.quotation_print_format =
+            this.pos_profile.posa_quotation_print_format ||
+            (this.quotation_print_formats.includes("Quotation") ? "Quotation" : null);
+        })
+        .catch((error) => {
+          console.error("Error loading quotation print formats:", error);
+        });
+    },
+
 // Prepare quotation data for direct creation
     get_quotation_data() {
       const quotation_data = {
@@ -2017,7 +2078,10 @@ export default {
         
         // Add items
         items: this.get_quotation_items(),
-        
+
+        // Terms and Conditions chosen for this quotation (falls back to POS Profile default)
+        tc_name: this.quotation_tc_name || this.pos_profile.posa_quotation_terms || '',
+
         // Add notes if any
         posa_notes: this.invoice_doc.posa_notes || ''
       };
@@ -2476,19 +2540,23 @@ export default {
     // Print quotation document
     print_quotation(quotation_name) {
       try {
-        const print_format = this.pos_profile.print_format_for_online ||
+        // Format selected for this quotation, else POS Profile default, else any
+        // Quotation format that exists on the site, else the generic fallback
+        const print_format = this.quotation_print_format ||
+                           this.pos_profile.posa_quotation_print_format ||
+                           (this.quotation_print_formats.length
+                             ? this.quotation_print_formats[0]
+                             : null) ||
                            this.pos_profile.print_format ||
                            "Standard";
-        const letter_head = this.pos_profile.letter_head || 0;
-        
+
         const url = frappe.urllib.get_base_url() +
           "/printview?doctype=Quotation&name=" +
-          quotation_name +
+          encodeURIComponent(quotation_name) +
           "&trigger_print=1" +
           "&format=" +
-          print_format +
-          "&no_letterhead=" +
-          letter_head;
+          encodeURIComponent(print_format) +
+          "&no_letterhead=0";
           
         const printWindow = window.open(url, "Print");
         printWindow.addEventListener(
@@ -5274,8 +5342,9 @@ export default {
       }
       if (this.pos_profile.posa_allow_create_quotation) {
         this.invoiceTypes.push("Quotation");
+        this.load_quotation_options();
       }
-      
+
       // Set default invoice type
       this.invoiceType = this.pos_profile.posa_default_sales_order
         ? "Order"

@@ -434,23 +434,35 @@ def create_quotation_from_invoice(sales_invoice):
 
 def load_quotation_print_page(quotation_name, pos_profile):
     """Load print page for quotation"""
-    print_format = frappe.get_cached_value("POS Profile", pos_profile, "print_format_for_online") or \
-                   frappe.get_cached_value("POS Profile", pos_profile, "print_format") or \
-                   "Standard"
-    
-    letter_head = frappe.get_cached_value("POS Profile", pos_profile, "letter_head") or 0
-    
+    from urllib.parse import quote
+
+    from frappe.utils import get_url
+
+    print_format = frappe.get_cached_value(
+        "POS Profile", pos_profile, "posa_quotation_print_format"
+    )
+
+    if not print_format or not frappe.db.exists("Print Format", print_format):
+        # Fall back to any enabled Quotation format, then to the generic one
+        fallback = frappe.get_all(
+            "Print Format",
+            filters={"doc_type": "Quotation", "disabled": 0},
+            pluck="name",
+            order_by="name",
+            limit=1,
+        )
+        print_format = fallback[0] if fallback else "Standard"
+
     url = (
-        frappe.urllib.get_base_url() +
+        get_url() +
         "/printview?doctype=Quotation&name=" +
-        quotation_name +
+        quote(quotation_name) +
         "&trigger_print=1" +
         "&format=" +
-        print_format +
-        "&no_letterhead=" +
-        str(letter_head)
+        quote(print_format) +
+        "&no_letterhead=0"
     )
-    
+
     return url
 
 
