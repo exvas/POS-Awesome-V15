@@ -132,6 +132,10 @@ export default {
     items_loaded: false,
     selected_currency: "",
     exchange_rate: 1,
+    // Server-lookup fallback for items not present in the locally loaded list
+    // (e.g. items created after POS was opened)
+    missing_lookup_inflight: null,
+    missing_lookup_misses: {},
   }),
 
   watch: {
@@ -139,6 +143,9 @@ export default {
       if (!this.pos_profile.pose_use_limit_search) {
         if (new_value.length != old_value.length) {
           this.update_items_details(new_value);
+        }
+        if (new_value.length == 0 && this.items_loaded) {
+          this.fetch_missing_items(this.get_search(this.first_search));
         }
       }
     },
@@ -250,6 +257,66 @@ export default {
               vm.enter_event();
             }
           }
+        },
+      });
+    },
+    fetch_missing_items(search_term, callback) {
+      // The full item list is loaded once at POS start (non limit-search mode),
+      // so items created afterwards (new stock transferred in today, etc.) are
+      // not in `items`. When a local search finds nothing, ask the server for
+      // that term and merge whatever it returns into the loaded list.
+      const vm = this;
+      if (
+        vm.pos_profile.pose_use_limit_search ||
+        !search_term ||
+        search_term.length < 3 ||
+        vm.missing_lookup_inflight === search_term ||
+        vm.missing_lookup_misses[search_term]
+      ) {
+        if (callback) callback(false);
+        return;
+      }
+      vm.missing_lookup_inflight = search_term;
+      frappe.call({
+        method: "posawesome.posawesome.api.posapp.get_items",
+        args: {
+          pos_profile: {
+            ...vm.pos_profile,
+            pose_use_limit_search: 1,
+            posa_search_limit: 50,
+          },
+          price_list: vm.customer_price_list,
+          item_group: "",
+          search_value: search_term,
+          customer: vm.customer,
+        },
+        callback: function (r) {
+          vm.missing_lookup_inflight = null;
+          const found = r.message || [];
+          if (!found.length) {
+            vm.missing_lookup_misses[search_term] = true;
+            if (callback) callback(false);
+            return;
+          }
+          const existing = new Set(vm.items.map((i) => i.item_code));
+          const fresh = found.filter((i) => !existing.has(i.item_code));
+          if (fresh.length) {
+            vm.items = vm.items.concat(fresh);
+            vm.eventBus.emit("set_all_items", vm.items);
+            if (vm.pos_profile.posa_local_storage) {
+              try {
+                localStorage.setItem("items_storage", JSON.stringify(vm.items));
+              } catch (e) {
+                console.error(e);
+              }
+            }
+            console.info(`Loaded ${fresh.length} item(s) from server for "${search_term}"`);
+          }
+          if (callback) callback(fresh.length > 0);
+        },
+        error: function () {
+          vm.missing_lookup_inflight = null;
+          if (callback) callback(false);
         },
       });
     },
@@ -425,7 +492,13 @@ export default {
             // Save the current filtered items before search to maintain quantity data
             const current_items = [...vm.filtered_items];
             if(vm.search && vm.search.length >=3) {
-              vm.enter_event();
+              if (vm.filtered_items.length == 0) {
+                vm.fetch_missing_items(vm.get_search(vm.first_search), (added) => {
+                  if (added) vm.$nextTick(() => vm.enter_event());
+                });
+              } else {
+                vm.enter_event();
+              }
             }
             
             // After search, update quantities for newly filtered items
@@ -588,14 +661,24 @@ export default {
       }
     },
     trigger_onscan(sCode) {
-      if (this.filtered_items.length == 0) {
-        this.eventBus.emit("show_message", {
+      const vm = this;
+      const not_found = () => {
+        vm.eventBus.emit("show_message", {
           title: `No Item has this barcode "${sCode}"`,
           color: "error",
         });
         frappe.utils.play_sound("error");
+      };
+      if (vm.filtered_items.length == 0) {
+        vm.fetch_missing_items(sCode, (added) => {
+          if (added && vm.filtered_items.length) {
+            vm.$nextTick(() => vm.enter_event());
+          } else {
+            not_found();
+          }
+        });
       } else {
-        this.enter_event();
+        vm.enter_event();
       }
     },
 
