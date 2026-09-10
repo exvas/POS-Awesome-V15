@@ -5,7 +5,7 @@
 from __future__ import unicode_literals
 import json
 import frappe
-from frappe.utils import nowdate, flt, cstr, getdate, cint, money_in_words
+from frappe.utils import nowdate, flt, cstr, getdate, cint, money_in_words, get_datetime
 from erpnext.setup.utils import get_exchange_rate
 from frappe import _
 from erpnext.accounts.doctype.sales_invoice.sales_invoice import get_bank_cash_account
@@ -315,6 +315,95 @@ def get_stock_availability(item_code, warehouse):
 
 
 
+def get_logical_rack_map(item_codes, pos_profile=None, warehouse=None):
+    """Return {item_code: rack} resolved from every place a rack can be recorded.
+
+    A rack can live in three places and any of them can hold the latest truth:
+
+    1. `Logical Rack` - the rack master, optionally scoped to a POS Profile.
+    2. `Purchase Receipt Item.logical_rack` - the rack the goods were put in the
+       last time they were received.
+    3. `Item.custom_rak_location` - the rack kept on the item itself.
+
+    The master and the purchase receipts are compared by date, so a rack typed
+    on a fresh receipt shows up in the POS without anybody updating the master,
+    while an edited master still wins over an older receipt. The item field is
+    only used for items neither of the other two knows about.
+    """
+    item_codes = list({code for code in (item_codes or []) if code})
+    if not item_codes:
+        return {}
+
+    resolved = {}
+
+    def set_rack(item_code, rack, timestamp):
+        rack = cstr(rack).strip()
+        if not item_code or not rack:
+            return
+        current = resolved.get(item_code)
+        if current and get_datetime(current[1]) >= get_datetime(timestamp):
+            return
+        resolved[item_code] = (rack, timestamp)
+
+    # 1. the rack master
+    for row in frappe.get_all(
+        "Logical Rack",
+        filters={"item": ["in", item_codes]},
+        fields=["item", "rack_id", "pos_profile", "modified"],
+    ):
+        # rows without a profile are shared by every profile
+        if row.pos_profile and pos_profile and row.pos_profile != pos_profile:
+            continue
+        set_rack(row.item, row.rack_id, row.modified)
+
+    # 2. the rack entered on the last purchase receipt of the item
+    if frappe.get_meta("Purchase Receipt Item").has_field("logical_rack"):
+        receipt_rows = frappe.db.sql(
+            """
+            SELECT pri.item_code, pri.logical_rack, pri.warehouse, pri.modified
+            FROM `tabPurchase Receipt Item` pri
+            INNER JOIN `tabPurchase Receipt` pr ON pr.name = pri.parent
+            WHERE pr.docstatus = 1
+                AND ifnull(pri.logical_rack, '') != ''
+                AND pri.item_code IN %(item_codes)s
+            """,
+            {"item_codes": item_codes},
+            as_dict=True,
+        )
+        receipts_by_item = {}
+        for row in receipt_rows:
+            receipts_by_item.setdefault(row.item_code, []).append(row)
+        for item_code, rows in receipts_by_item.items():
+            # a rack belongs to a warehouse, so only look elsewhere when the
+            # item was never received into the warehouse we are selling from
+            preferred = [row for row in rows if row.warehouse == warehouse] if warehouse else []
+            row = max(preferred or rows, key=lambda r: get_datetime(r.modified))
+            set_rack(item_code, row.logical_rack, row.modified)
+
+    # 3. the rack kept on the item, for items the two sources above miss
+    missing = [code for code in item_codes if code not in resolved]
+    if missing and frappe.get_meta("Item").has_field("custom_rak_location"):
+        for row in frappe.get_all(
+            "Item",
+            filters={"name": ["in", missing]},
+            fields=["name", "custom_rak_location", "modified"],
+        ):
+            set_rack(row.name, row.custom_rak_location, row.modified)
+
+    return {item_code: rack for item_code, (rack, _ts) in resolved.items()}
+
+
+def get_logical_rack(item_code, pos_profile=None, warehouse=None):
+    """Resolve the rack of a single item, see get_logical_rack_map."""
+    return get_logical_rack_map([item_code], pos_profile, warehouse).get(item_code, "")
+
+
+def make_rack_info(rack):
+    """Rack under every key the POS screens read it from."""
+    rack = cstr(rack)
+    return {"logical_rack": rack, "rack": rack, "custom_logical_rack": rack}
+
+
 @frappe.whitelist()
 def get_items(
     pos_profile, price_list=None, item_group="", search_value="", customer=None
@@ -418,6 +507,12 @@ def get_items(
 
         if items_data:
             items = [d.item_code for d in items_data]
+            custom_show_logical_rack = pos_profile.get("custom_show_logical_rack")
+            rack_map = (
+                get_logical_rack_map(items, pos_profile.get("name"), warehouse)
+                if custom_show_logical_rack
+                else {}
+            )
             item_prices_data = frappe.get_all(
                 "Item Price",
                 fields=["item_code", "price_list_rate", "currency", "uom"],
@@ -502,19 +597,11 @@ def get_items(
                     incoming_rate = stock_data["incoming_rate"]
                     last_incoming_rate = stock_data["last_incoming_rate"]
                 can_view_inc_rate = _can_view_incoming_rate(pos_profile.get("name"))
-                rack_info = {}
-                custom_show_logical_rack = pos_profile.get("custom_show_logical_rack")  # Add this field to POS Profile
-                if custom_show_logical_rack:
-                    rack = frappe.db.sql(""" 
-                        SELECT * FROM `tabLogical Rack` 
-                        WHERE item=%s and pos_profile=%s 
-                    """, (item.item_code, pos_profile.get("name")), as_dict=1)
-                    
-                    if len(rack) > 0:
-                        rack_info = {
-                            'rack': rack[0].rack_id,
-                            'custom_logical_rack': rack[0].rack_id
-                        }
+                rack_info = (
+                    make_rack_info(rack_map.get(item_code, ""))
+                    if custom_show_logical_rack
+                    else {}
+                )
                 
                 attributes = ""
                 if pos_profile.get("posa_show_template_items") and item.has_variants:
@@ -1263,6 +1350,15 @@ def get_items_details(pos_profile, items_data):
         result = []
 
         if len(items_data) > 0:
+            rack_map = (
+                get_logical_rack_map(
+                    [item.get("item_code") for item in items_data],
+                    pos_profile.get("name"),
+                    warehouse,
+                )
+                if custom_show_logical_rack
+                else {}
+            )
             for item in items_data:
                 item_code = item.get("item_code")
                 # Force refresh stock quantity on each request using proper cache clearing
@@ -1335,19 +1431,11 @@ def get_items_details(pos_profile, items_data):
                                     }
                                 )
 
-                # Get logical rack information from Logical Rack doctype
-                rack_info = {}
-                if custom_show_logical_rack:
-                    rack = frappe.db.sql(""" 
-                        SELECT * FROM `tabLogical Rack` 
-                        WHERE item=%s and pos_profile=%s 
-                    """, (item_code, pos_profile.get("name")), as_dict=1)
-                    
-                    if len(rack) > 0:
-                        rack_info = {
-                            'rack': rack[0].rack_id,
-                            'custom_logical_rack': rack[0].rack_id
-                        }
+                rack_info = (
+                    make_rack_info(rack_map.get(item_code, ""))
+                    if custom_show_logical_rack
+                    else {}
+                )
                 item_codes = [item.get("item_code") for item in items_data]
                 last_customer_rates = {}
                 if show_last_customer_rate and customer and item_codes:
@@ -1450,45 +1538,33 @@ def get_item_detail(item, doc=None, warehouse=None, price_list=None):
         as_dict=True
     )
 
-    if item_details:
-        res["oem_part_number"] = item_details.custom_oem_part_number or ""
-        # Use item's custom_rak_location as fallback
-        res["logical_rack"] = item_details.custom_rak_location or ""
-    else:
-        res["oem_part_number"] = ""
-        res["logical_rack"] = ""
+    res["oem_part_number"] = (item_details.custom_oem_part_number or "") if item_details else ""
+    res.update(make_rack_info(""))
     
     # Get POS Profile information and last customer rate
-    pos_profile_name = None
-    customer = None
+    pos_profile_name = item.get("pos_profile")
+    customer = item.get("customer")
     show_last_customer_rate = 0
     
     if doc:  # doc should contain pos_profile information
         doc_dict = json.loads(doc) if isinstance(doc, str) else doc
-        pos_profile_name = doc_dict.get("pos_profile") if doc_dict else None
-        customer = doc_dict.get("customer") if doc_dict else None
-        
-        if pos_profile_name:
-            pos_profile_doc = frappe.get_doc("POS Profile", pos_profile_name)
-            custom_show_logical_rack = pos_profile_doc.get("custom_show_logical_rack")
-            show_last_customer_rate = pos_profile_doc.get("custom_show_last_custom_rate", 0)
-            
-            # Get logical rack information from Logical Rack doctype
-            if custom_show_logical_rack:
-                rack = frappe.db.sql(""" 
-                    SELECT rack_id FROM `tabLogical Rack` 
-                    WHERE item=%s AND pos_profile=%s 
-                    LIMIT 1
-                """, (item_code, pos_profile_name), as_dict=1)
-                
-                if rack and len(rack) > 0:
-                    rack_id = rack[0].rack_id
-                    res["rack"] = rack_id
-                    res["custom_logical_rack"] = rack_id
-                    res["logical_rack"] = rack_id  # Override the fallback value
-                    print(f"Found logical rack for {item_code}: {rack_id}")  # Debug log
-                else:
-                    print(f"No logical rack found for {item_code} in POS Profile {pos_profile_name}")  # Debug log
+        pos_profile_name = (doc_dict.get("pos_profile") if doc_dict else None) or pos_profile_name
+        customer = (doc_dict.get("customer") if doc_dict else None) or customer
+
+    if pos_profile_name:
+        pos_profile_doc = frappe.get_cached_doc("POS Profile", pos_profile_name)
+        show_last_customer_rate = pos_profile_doc.get("custom_show_last_custom_rate", 0)
+
+        if pos_profile_doc.get("custom_show_logical_rack"):
+            res.update(
+                make_rack_info(
+                    get_logical_rack(
+                        item_code,
+                        pos_profile_name,
+                        warehouse or pos_profile_doc.get("warehouse"),
+                    )
+                )
+            )
     
     # Get last customer rate
     last_customer_rate = 0

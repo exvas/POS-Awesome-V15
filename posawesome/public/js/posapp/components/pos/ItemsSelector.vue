@@ -320,6 +320,11 @@ export default {
   items_headers.push({ title: __("Rate"), key: "rate", align: "start" });
   items_headers.push({ title: __("UOM"), key: "stock_uom", align: "start" });
 
+  // Add logical rack column if enabled
+  if (this.pos_profile.custom_show_logical_rack) {
+    items_headers.push({ title: __("Rack"), key: "logical_rack", align: "start" });
+  }
+
   // Add OEM part number column if enabled
   if (this.pos_profile.custom_show_oem_part_number) {
     items_headers.push({ title: __("OEM Part"), key: "oem_part_number", align: "start" });
