@@ -286,7 +286,9 @@ fixtures = [
                     "POS Profile-posa_quotation_print_format",
                     "POS Profile-posa_quotation_terms",
                     "POS Profile-custom_section_break_wkfyl",
-                    "POS Profile-custom_pos_incoming_rate_permissions"
+                    "POS Profile-custom_pos_incoming_rate_permissions",
+                    "POS Profile-custom_show_other_profile_stock",
+                    "POS Profile-custom_stock_view_profiles"
                 ]
             ]
         ]
@@ -299,6 +301,7 @@ fixtures = [
                 "in",
                 (
                     "POS Profile User Permission",
+                    "POS Profile Stock View",
                 )
             ]
         ]

@@ -314,6 +314,65 @@ def get_stock_availability(item_code, warehouse):
     return result
 
 
+def get_stock_view_columns(pos_profile_name):
+    """Return [{key, label, warehouse}] for the extra stock columns of a POS Profile.
+
+    Only filled when `custom_show_other_profile_stock` is ticked; each row of
+    `custom_stock_view_profiles` becomes one column showing the stock of that
+    profile's warehouse. The key is the row position so the POS screen can build
+    its headers from the same table without knowing the warehouses.
+    """
+    if not pos_profile_name or not frappe.db.get_value(
+        "POS Profile", pos_profile_name, "custom_show_other_profile_stock"
+    ):
+        return []
+
+    rows = frappe.get_all(
+        "POS Profile Stock View",
+        filters={
+            "parent": pos_profile_name,
+            "parenttype": "POS Profile",
+            "parentfield": "custom_stock_view_profiles",
+        },
+        fields=["pos_profile", "column_label"],
+        order_by="idx asc",
+    )
+    columns = []
+    for idx, row in enumerate(rows):
+        warehouse = frappe.db.get_value("POS Profile", row.pos_profile, "warehouse")
+        if warehouse:
+            columns.append(
+                {
+                    "key": "posa_stock_view_{0}".format(idx),
+                    "label": row.column_label or row.pos_profile,
+                    "warehouse": warehouse,
+                }
+            )
+    return columns
+
+
+def get_stock_view_map(item_codes, columns):
+    """Return {item_code: {column_key: qty}} for the given stock view columns."""
+    if not item_codes or not columns:
+        return {}
+
+    bins = frappe.get_all(
+        "Bin",
+        filters={
+            "item_code": ["in", item_codes],
+            "warehouse": ["in", list({c["warehouse"] for c in columns})],
+        },
+        fields=["item_code", "warehouse", "actual_qty"],
+    )
+    qty_by_warehouse = {(b.item_code, b.warehouse): flt(b.actual_qty) for b in bins}
+    return {
+        item_code: {
+            c["key"]: qty_by_warehouse.get((item_code, c["warehouse"]), 0.0)
+            for c in columns
+        }
+        for item_code in item_codes
+    }
+
 
 def get_logical_rack_map(item_codes, pos_profile=None, warehouse=None):
     """Return {item_code: rack} resolved from every place a rack can be recorded.
@@ -513,6 +572,9 @@ def get_items(
                 if custom_show_logical_rack
                 else {}
             )
+            stock_view_map = get_stock_view_map(
+                items, get_stock_view_columns(pos_profile.get("name"))
+            )
             item_prices_data = frappe.get_all(
                 "Item Price",
                 fields=["item_code", "price_list_rate", "currency", "uom"],
@@ -639,6 +701,7 @@ def get_items(
                     )
                     if rack_info:
                         row.update(rack_info)
+                    row.update(stock_view_map.get(item_code, {}))
                     result.append(row)
         return result
 
@@ -1359,6 +1422,10 @@ def get_items_details(pos_profile, items_data):
                 if custom_show_logical_rack
                 else {}
             )
+            stock_view_map = get_stock_view_map(
+                [item.get("item_code") for item in items_data],
+                get_stock_view_columns(pos_profile.get("name")),
+            )
             for item in items_data:
                 item_code = item.get("item_code")
                 # Force refresh stock quantity on each request using proper cache clearing
@@ -1479,6 +1546,8 @@ def get_items_details(pos_profile, items_data):
                 # Add logical rack data if available
                 if rack_info:
                     row.update(rack_info)
+
+                row.update(stock_view_map.get(item_code, {}))
 
                 result.append(row)
 

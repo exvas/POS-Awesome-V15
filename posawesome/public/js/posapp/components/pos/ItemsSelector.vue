@@ -39,9 +39,13 @@
                       {{ formatCurrency(getConvertedRate(item)) }}
                     </div>
                     
-                    <div class="text-caption text-green font-weight-bold">
+                    <div v-if="!pos_profile.custom_show_other_profile_stock" class="text-caption text-green font-weight-bold">
                       {{ format_number(item.actual_qty, 4) || 0 }}
                       {{ item.stock_uom || "" }}
+                    </div>
+                    <!-- Other Profiles' Stock Display -->
+                    <div v-for="col in stockViewColumns" :key="col.key" class="text-caption text-teal">
+                      {{ col.label }}: {{ format_number(item[col.key] || 0, 4) }}
                     </div>
                     <!-- Logical Rack Display -->
                     <div v-if="pos_profile.custom_show_logical_rack && item.logical_rack" class="text-caption text-secondary">
@@ -70,6 +74,10 @@
                 </template>
                 <template v-slot:item.actual_qty="{ item }">
                   <span class="text-green font-weight-bold">{{ format_number(item.actual_qty, 4) }}</span>
+                </template>
+                <!-- Other Profiles' Stock Column Templates -->
+                <template v-for="col in stockViewColumns" :key="col.key" #[col.slot]="{ item }">
+                  <span class="text-teal font-weight-bold">{{ format_number(item[col.key] || 0, 4) }}</span>
                 </template>
                 <!-- Current Incoming Rate Column Template -->
                 <template v-slot:item.incoming_rate="{ item }">
@@ -313,7 +321,14 @@ export default {
       key: "item_code",
     },
   ];
-  items_headers.push({ title: __("Qty Avail"), key: "actual_qty", align: "start" });
+  // Other Profiles' Stock replaces the common Qty Avail column when enabled
+  if (!this.pos_profile.custom_show_other_profile_stock) {
+    items_headers.push({ title: __("Qty Avail"), key: "actual_qty", align: "start" });
+  }
+  // Add one stock column per POS Profile listed in Stock View Profiles
+  this.stockViewColumns.forEach((col) => {
+    items_headers.push({ title: col.label, key: col.key, align: "start" });
+  });
   // Add current incoming rate column if enabled
 
   
@@ -597,6 +612,13 @@ export default {
                 if (updated_item.last_incoming_date !== undefined) {
                   item.last_incoming_date = updated_item.last_incoming_date;
                 }
+
+                // Update other profiles' stock
+                vm.stockViewColumns.forEach((col) => {
+                  if (updated_item[col.key] !== undefined) {
+                    item[col.key] = updated_item[col.key];
+                  }
+                });
 
                 // Update logical rack
                 if (updated_item.logical_rack !== undefined) {
@@ -953,6 +975,21 @@ export default {
       if (!permissions || permissions.length === 0) return true;
       const userPerm = permissions.find(p => p.user === frappe.session.user);
       return userPerm ? !!userPerm.show_incoming_rate : false;
+    },
+    stockViewColumns() {
+      // Keys must match get_stock_view_columns() in posapp.py (row position)
+      if (!this.pos_profile || !this.pos_profile.custom_show_other_profile_stock) {
+        return [];
+      }
+      return [...(this.pos_profile.custom_stock_view_profiles || [])]
+        .sort((a, b) => a.idx - b.idx)
+        .map((row, idx) => ({
+          key: `posa_stock_view_${idx}`,
+          slot: `item.posa_stock_view_${idx}`,
+          label: row.column_label || row.pos_profile,
+          pos_profile: row.pos_profile,
+        }))
+        .filter((col) => col.pos_profile);
     },
     dynamic_items_headers() {
       const headers = [
