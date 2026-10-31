@@ -8,7 +8,7 @@
     "@vuepic/vue-datepicker": "11.0.2",
     "@vueuse/core": "^13.4.0",
     "dexie": "^4.0.11",
-    "lodash": "^4.17.21",
+    "lodash": "^4.18.0",
     "mitt": "^3.0.1",
     "socket.io-client": "^4.8.1",
     "vue": "^3.3.4",
@@ -24,7 +24,23 @@
     "eslint-plugin-vue": "^9.32.0",
     "eslint-plugin-vuetify": "^2.5.1",
     "globals": "^15.13.0",
-    "vite": "^6.2.4",
+    "vite": "^6.4.4",
     "vue": "^3.3.4"
+  },
+  "overrides": {
+    "postcss-selector-parser": "^6.1.5",
+    "source-map-js": "^1.2.2",
+    "@vue/server-renderer": "^3.5.42",
+    "brace-expansion": "^1.1.21",
+    "js-yaml": "^4.3.2",
+    "@humanfs/node": "^0.16.8",
+    "nanoid": "^3.3.18",
+    "socket.io-parser": "^4.2.7",
+    "postcss": "^8.5.23",
+    "ws": "^8.21.0",
+    "picomatch": "^4.0.4",
+    "flatted": "^3.4.2",
+    "minimatch": "^3.1.3",
+    "rollup": "^4.59.0"
   }
 }
